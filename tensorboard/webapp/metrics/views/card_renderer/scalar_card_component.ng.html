@@ -44,7 +44,6 @@ limitations under the License.
       </button>
       <button
         mat-icon-button
-        class="pin-button"
         i18n-aria-label="A button to pin a card."
         aria-label="Pin card"
         [attr.title]="isPinned ? 'Unpin card' : 'Pin card'"
@@ -199,11 +198,20 @@ limitations under the License.
       [columnHeaders]="columnHeaders"
       [sortingInfo]="sortingInfo"
       [columnCustomizationEnabled]="columnCustomizationEnabled"
+      [columnContextMenusEnabled]="columnContextMenusEnabled"
       [smoothingEnabled]="smoothingEnabled"
-      [hparamsEnabled]="hparamsEnabled"
+      [columnFilters]="columnFilters"
+      [runToHparamMap]="runToHparamMap"
+      [selectableColumns]="selectableColumns"
+      [numColumnsLoaded]="numColumnsLoaded"
+      [numColumnsToLoad]="numColumnsToLoad"
       (sortDataBy)="sortDataBy($event)"
       (editColumnHeaders)="editColumnHeaders.emit($event)"
-      (removeColumn)="removeColumn($event)"
+      (addColumn)="addColumn.emit($event)"
+      (removeColumn)="removeColumn.emit($event)"
+      (hideColumn)="hideColumn.emit($event)"
+      (addFilter)="addFilter.emit($event)"
+      (loadAllColumns)="loadAllColumns.emit()"
     >
     </scalar-card-data-table>
   </div>

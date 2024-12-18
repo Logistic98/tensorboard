@@ -147,9 +147,23 @@ export const getIsScalarColumnCustomizationEnabled = createSelector(
   }
 );
 
-export const getEnableHparamsInTimeSeries = createSelector(
+export const getIsScalarColumnContextMenusEnabled = createSelector(
   getFeatureFlags,
   (flags: FeatureFlags): boolean => {
-    return flags.enableHparamsInTimeSeries;
+    return flags.enableScalarColumnContextMenus;
+  }
+);
+
+export const getEnableGlobalPins = createSelector(
+  getFeatureFlags,
+  (flags: FeatureFlags): boolean => {
+    return flags.enableGlobalPins;
+  }
+);
+
+export const getEnableColorByExperiment = createSelector(
+  getFeatureFlags,
+  (flags: FeatureFlags): boolean => {
+    return flags.enableColorByExperiment;
   }
 );

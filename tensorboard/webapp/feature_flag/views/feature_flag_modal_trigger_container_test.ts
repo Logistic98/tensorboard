@@ -35,8 +35,10 @@ import {
 } from './feature_flag_modal_trigger_container';
 
 @Component({
+  standalone: false,
   selector: 'testable-feature-flag-dialog-container',
   template: '<div>Test</div>',
+  jit: true,
 })
 class TestableFeatureFlagDialogContainer {}
 

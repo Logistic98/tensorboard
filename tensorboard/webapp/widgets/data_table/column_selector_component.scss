@@ -37,14 +37,28 @@ limitations under the License.
   }
 
   .search-area {
-    margin-bottom: 4px;
+    margin-bottom: 12px;
+  }
 
-    mat-icon.search-icon {
-      font-size: 1em;
+  .column-load-info {
+    display: flex;
+    flex-direction: column;
+    font-size: 13px;
+    font-style: italic;
+    margin-bottom: 12px;
+  }
 
-      ::ng-deep svg {
-        padding-top: 6px;
-      }
+  .load-more-columns {
+    color: mat.get-color-from-palette($tb-warn, 600);
+    display: flex;
+    flex-direction: column;
+    margin-top: 6px;
+
+    button {
+      color: inherit;
+      font-size: inherit;
+      height: 24px;
+      margin-top: 8px;
     }
   }
 
@@ -53,12 +67,16 @@ limitations under the License.
     flex-direction: column;
     width: 100%;
 
-    max-height: 200px;
-    overflow-y: scroll;
+    max-height: 300px;
+    overflow-y: auto;
   }
 
   .column-button {
-    text-align: left;
+    // Don't allow buttons to shrink when there are many of them.
+    flex-shrink: 0;
+    // Match height of button touch target to avoid unnecessary scrollbar.
+    height: 48px;
+    justify-content: left;
     width: 100%;
 
     &.selected {
@@ -68,5 +86,14 @@ limitations under the License.
         background-color: mat.get-color-from-palette(mat.$gray-palette, 400);
       }
     }
+  }
+
+  .tag {
+    background-color: mat.get-color-from-palette($tb-primary, 500);
+    border-radius: 8px;
+    font-size: 12px;
+    font-style: italic;
+    font-weight: normal;
+    padding: 4px;
   }
 }

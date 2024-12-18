@@ -1,19 +1,12 @@
 # Description:
 # Experimental framework for generic TensorBoard data providers.
 
+load("@rules_python//python:py_library.bzl", "py_library")
+load("@rules_python//python:py_test.bzl", "py_test")
+
 package(default_visibility = ["//tensorboard:internal"])
 
 licenses(["notice"])
-
-py_library(
-    name = "lib_init_only",
-    srcs = ["__init__.py"],
-    srcs_version = "PY3",
-    visibility = ["//tensorboard:internal"],
-    deps = [
-        "//tensorboard/data/experimental:lib_init_only",
-    ],
-)
 
 py_library(
     name = "provider",

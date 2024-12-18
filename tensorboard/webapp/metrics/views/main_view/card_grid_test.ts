@@ -48,6 +48,7 @@ import {CardGridContainer} from './card_grid_container';
 const scrollElementHeight = 100;
 
 @Component({
+  standalone: false,
   selector: 'testable-scrolling-container',
   template: `
     <div cdkScrollable>
@@ -81,7 +82,7 @@ class TestableScrollingContainer {
 /**
  * Stub 'card-view' component for ease of testing.
  */
-@Component({selector: 'card-view'})
+@Component({standalone: false, selector: 'card-view'})
 class TestableCardView {
   @Output() fullHeightChanged = new EventEmitter<boolean>();
   @Output() fullWidthChanged = new EventEmitter<boolean>();

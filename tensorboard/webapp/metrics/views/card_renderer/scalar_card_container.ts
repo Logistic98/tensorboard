@@ -38,8 +38,12 @@ import {
 import {State} from '../../../app_state';
 import {ExperimentAlias} from '../../../experiments/types';
 import {
-  getEnableHparamsInTimeSeries,
+  actions as hparamsActions,
+  selectors as hparamsSelectors,
+} from '../../../hparams';
+import {
   getForceSvgFeatureFlag,
+  getIsScalarColumnContextMenusEnabled,
   getIsScalarColumnCustomizationEnabled,
 } from '../../../feature_flag/store/feature_flag_selectors';
 import {
@@ -57,7 +61,8 @@ import {
   getRun,
   getRunColorMap,
   getCurrentRouteRunSelection,
-  getColumnHeadersForCard,
+  getGroupedHeadersForCard,
+  getRunToHparamMap,
 } from '../../../selectors';
 import {DataLoadState} from '../../../types/data';
 import {
@@ -70,14 +75,14 @@ import {Extent} from '../../../widgets/line_chart_v2/lib/public_types';
 import {ScaleType} from '../../../widgets/line_chart_v2/types';
 import {
   cardViewBoxChanged,
-  dataTableColumnEdited,
-  dataTableColumnToggled,
   metricsCardFullSizeToggled,
   metricsCardStateUpdated,
   sortingDataTable,
   stepSelectorToggled,
   timeSelectionChanged,
   metricsSlideoutMenuOpened,
+  dataTableColumnOrderChanged,
+  dataTableColumnToggled,
 } from '../../actions';
 import {PluginType, ScalarStepDatum} from '../../data_source';
 import {
@@ -100,7 +105,12 @@ import {
   HeaderToggleInfo,
   XAxisType,
 } from '../../types';
-import {getFilteredRenderableRunsIdsFromRoute} from '../main_view/common_selectors';
+import {RunToHparamMap} from '../../../runs/types';
+import {
+  getFilteredRenderableRunsIds,
+  getCurrentColumnFilters,
+  getSelectableColumns,
+} from '../main_view/common_selectors';
 import {CardRenderer} from '../metrics_view_types';
 import {getTagDisplayName} from '../utils';
 import {DataDownloadDialogContainer} from './data_download_dialog_container';
@@ -117,6 +127,8 @@ import {
   ColumnHeader,
   DataTableMode,
   SortingInfo,
+  FilterAddedEvent,
+  AddColumnEvent,
 } from '../../../widgets/data_table/types';
 import {
   maybeClipTimeSelectionView,
@@ -150,12 +162,8 @@ function areSeriesEqual(
   });
 }
 
-function isMinMaxStepValid(minMax: MinMaxStep | undefined): boolean {
-  if (!minMax) return false;
-  return !(minMax.minStep === -Infinity && minMax.maxStep === Infinity);
-}
-
 @Component({
+  standalone: false,
   selector: 'scalar-card',
   template: `
     <scalar-card-component
@@ -180,11 +188,16 @@ function isMinMaxStepValid(minMax: MinMaxStep | undefined): boolean {
       [stepOrLinkedTimeSelection]="stepOrLinkedTimeSelection$ | async"
       [forceSvg]="forceSvg$ | async"
       [columnCustomizationEnabled]="columnCustomizationEnabled$ | async"
+      [columnContextMenusEnabled]="columnContextMenusEnabled$ | async"
       [minMaxStep]="minMaxSteps$ | async"
       [userViewBox]="userViewBox$ | async"
       [columnHeaders]="columnHeaders$ | async"
       [rangeEnabled]="rangeEnabled$ | async"
-      [hparamsEnabled]="hparamsEnabled$ | async"
+      [columnFilters]="columnFilters$ | async"
+      [runToHparamMap]="runToHparamMap$ | async"
+      [selectableColumns]="selectableColumns$ | async"
+      [numColumnsLoaded]="numColumnsLoaded$ | async"
+      [numColumnsToLoad]="numColumnsToLoad$ | async"
       (onFullSizeToggle)="onFullSizeToggle()"
       (onPinClicked)="pinStateChanged.emit($event)"
       observeIntersection
@@ -196,7 +209,10 @@ function isMinMaxStepValid(minMax: MinMaxStep | undefined): boolean {
       (editColumnHeaders)="editColumnHeaders($event)"
       (onCardStateChanged)="onCardStateChanged($event)"
       (openTableEditMenuToMode)="openTableEditMenuToMode($event)"
-      (onRemoveColumn)="onRemoveColumn($event)"
+      (addColumn)="onAddColumn($event)"
+      (removeColumn)="onRemoveColumn($event)"
+      (addFilter)="addHparamFilter($event)"
+      (loadAllColumns)="loadAllColumns()"
     ></scalar-card-component>
   `,
   styles: [
@@ -210,7 +226,47 @@ function isMinMaxStepValid(minMax: MinMaxStep | undefined): boolean {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
-  constructor(private readonly store: Store<State>) {}
+  constructor(private readonly store: Store<State>) {
+    this.columnFilters$ = this.store.select(getCurrentColumnFilters);
+    this.numColumnsLoaded$ = this.store.select(
+      hparamsSelectors.getNumDashboardHparamsLoaded
+    );
+    this.numColumnsToLoad$ = this.store.select(
+      hparamsSelectors.getNumDashboardHparamsToLoad
+    );
+    this.useDarkMode$ = this.store.select(getDarkModeEnabled);
+    this.ignoreOutliers$ = this.store.select(getMetricsIgnoreOutliers);
+    this.tooltipSort$ = this.store.select(getMetricsTooltipSort);
+    this.xAxisType$ = this.store.select(getMetricsXAxisType);
+    this.forceSvg$ = this.store.select(getForceSvgFeatureFlag);
+    this.columnCustomizationEnabled$ = this.store.select(
+      getIsScalarColumnCustomizationEnabled
+    );
+    this.columnContextMenusEnabled$ = this.store.select(
+      getIsScalarColumnContextMenusEnabled
+    );
+    this.xScaleType$ = this.store.select(getMetricsXAxisType).pipe(
+      map((xAxisType) => {
+        switch (xAxisType) {
+          case XAxisType.STEP:
+          case XAxisType.RELATIVE:
+            return ScaleType.LINEAR;
+          case XAxisType.WALL_TIME:
+            return ScaleType.TIME;
+          default:
+            const neverType = xAxisType as never;
+            throw new Error(`Invalid xAxisType for line chart. ${neverType}`);
+        }
+      })
+    );
+    this.scalarSmoothing$ = this.store.select(getMetricsScalarSmoothing);
+    this.smoothingEnabled$ = this.store
+      .select(getMetricsScalarSmoothing)
+      .pipe(map((smoothing) => smoothing > 0));
+    this.showFullWidth$ = this.store
+      .select(getCardStateMap)
+      .pipe(map((map) => map[this.cardId]?.fullWidth));
+  }
 
   // Angular Component constructor for DataDownload dialog. It is customizable for
   // testability, without mocking out data for the component's internals, but defaults to
@@ -236,42 +292,29 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
   cardState$?: Observable<Partial<CardState>>;
   rangeEnabled$?: Observable<boolean>;
   hparamsEnabled$?: Observable<boolean>;
+  columnFilters$;
+  runToHparamMap$?: Observable<RunToHparamMap>;
+  selectableColumns$?: Observable<ColumnHeader[]>;
+  numColumnsLoaded$;
+  numColumnsToLoad$;
 
   onVisibilityChange({visible}: {visible: boolean}) {
     this.isVisible = visible;
   }
 
-  readonly useDarkMode$ = this.store.select(getDarkModeEnabled);
-  readonly ignoreOutliers$ = this.store.select(getMetricsIgnoreOutliers);
-  readonly tooltipSort$ = this.store.select(getMetricsTooltipSort);
-  readonly xAxisType$ = this.store.select(getMetricsXAxisType);
-  readonly forceSvg$ = this.store.select(getForceSvgFeatureFlag);
-  readonly columnCustomizationEnabled$ = this.store.select(
-    getIsScalarColumnCustomizationEnabled
-  );
-  readonly xScaleType$ = this.store.select(getMetricsXAxisType).pipe(
-    map((xAxisType) => {
-      switch (xAxisType) {
-        case XAxisType.STEP:
-        case XAxisType.RELATIVE:
-          return ScaleType.LINEAR;
-        case XAxisType.WALL_TIME:
-          return ScaleType.TIME;
-        default:
-          const neverType = xAxisType as never;
-          throw new Error(`Invalid xAxisType for line chart. ${neverType}`);
-      }
-    })
-  );
+  readonly useDarkMode$;
+  readonly ignoreOutliers$;
+  readonly tooltipSort$;
+  readonly xAxisType$;
+  readonly forceSvg$;
+  readonly columnCustomizationEnabled$;
+  readonly columnContextMenusEnabled$;
+  readonly xScaleType$;
 
-  readonly scalarSmoothing$ = this.store.select(getMetricsScalarSmoothing);
-  readonly smoothingEnabled$ = this.store
-    .select(getMetricsScalarSmoothing)
-    .pipe(map((smoothing) => smoothing > 0));
+  readonly scalarSmoothing$;
+  readonly smoothingEnabled$;
 
-  readonly showFullWidth$ = this.store
-    .select(getCardStateMap)
-    .pipe(map((map) => map[this.cardId]?.fullWidth));
+  readonly showFullWidth$;
 
   private readonly ngUnsubscribe = new Subject<void>();
 
@@ -471,7 +514,7 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
     );
 
     this.columnHeaders$ = this.store.select(
-      getColumnHeadersForCard(this.cardId)
+      getGroupedHeadersForCard(this.cardId)
     );
 
     this.chartMetadataMap$ = partitionedSeries$.pipe(
@@ -498,8 +541,7 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
       }),
       combineLatestWith(
         this.store.select(getCurrentRouteRunSelection),
-        this.store.select(getEnableHparamsInTimeSeries),
-        this.store.select(getFilteredRenderableRunsIdsFromRoute),
+        this.store.select(getFilteredRenderableRunsIds),
         this.store.select(getRunColorMap),
         this.store.select(getMetricsScalarSmoothing)
       ),
@@ -512,7 +554,6 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
         ([
           namedPartitionedSeries,
           runSelectionMap,
-          hparamsInTimeSeriesEnabled,
           renderableRuns,
           colorMap,
           smoothing,
@@ -541,7 +582,7 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
               visible: Boolean(
                 runSelectionMap &&
                   runSelectionMap.get(runId) &&
-                  (!hparamsInTimeSeriesEnabled || renderableRuns.has(runId))
+                  renderableRuns.has(runId)
               ),
               color: colorMap[runId] ?? '#fff',
               aux: false,
@@ -596,11 +637,12 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
     this.isPinned$ = this.store.select(getCardPinnedState, this.cardId);
 
     this.rangeEnabled$ = this.store.select(
-      getMetricsCardRangeSelectionEnabled,
-      this.cardId
+      getMetricsCardRangeSelectionEnabled(this.cardId)
     );
 
-    this.hparamsEnabled$ = this.store.select(getEnableHparamsInTimeSeries);
+    this.runToHparamMap$ = this.store.select(getRunToHparamMap);
+
+    this.selectableColumns$ = this.store.select(getSelectableColumns);
   }
 
   ngOnDestroy() {
@@ -687,15 +729,59 @@ export class ScalarCardContainer implements CardRenderer, OnInit, OnDestroy {
     );
   }
 
-  editColumnHeaders(headerEditInfo: HeaderEditInfo) {
-    this.store.dispatch(dataTableColumnEdited(headerEditInfo));
+  editColumnHeaders({
+    source,
+    destination,
+    side,
+    dataTableMode,
+  }: HeaderEditInfo) {
+    if (source.type === 'HPARAM') {
+      this.store.dispatch(
+        hparamsActions.dashboardHparamColumnOrderChanged({
+          source,
+          destination,
+          side,
+        })
+      );
+    } else {
+      this.store.dispatch(
+        dataTableColumnOrderChanged({source, destination, side, dataTableMode})
+      );
+    }
   }
 
   openTableEditMenuToMode(tableMode: DataTableMode) {
     this.store.dispatch(metricsSlideoutMenuOpened({mode: tableMode}));
   }
 
-  onRemoveColumn(headerToggleInfo: HeaderToggleInfo) {
-    this.store.dispatch(dataTableColumnToggled(headerToggleInfo));
+  onAddColumn(addColumnEvent: AddColumnEvent) {
+    this.store.dispatch(
+      hparamsActions.dashboardHparamColumnAdded(addColumnEvent)
+    );
+  }
+
+  onRemoveColumn({header, dataTableMode}: HeaderToggleInfo) {
+    if (header.type === 'HPARAM') {
+      this.store.dispatch(
+        hparamsActions.dashboardHparamColumnRemoved({column: header})
+      );
+    } else {
+      this.store.dispatch(
+        dataTableColumnToggled({header, cardId: this.cardId, dataTableMode})
+      );
+    }
+  }
+
+  addHparamFilter(event: FilterAddedEvent) {
+    this.store.dispatch(
+      hparamsActions.dashboardHparamFilterAdded({
+        name: event.name,
+        filter: event.value,
+      })
+    );
+  }
+
+  loadAllColumns() {
+    this.store.dispatch(hparamsActions.loadAllDashboardHparams());
   }
 }

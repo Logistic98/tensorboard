@@ -28,6 +28,7 @@ import {ColumnHeader} from './types';
 import {BehaviorSubject} from 'rxjs';
 
 @Component({
+  standalone: false,
   selector: 'tb-data-table-column-selector-component',
   templateUrl: 'column_selector_component.ng.html',
   styleUrls: ['column_selector_component.css'],
@@ -35,7 +36,10 @@ import {BehaviorSubject} from 'rxjs';
 })
 export class ColumnSelectorComponent implements OnInit, AfterViewInit {
   @Input() selectableColumns: ColumnHeader[] = [];
+  @Input() numColumnsLoaded!: number;
+  @Input() hasMoreColumnsToLoad!: boolean;
   @Output() columnSelected = new EventEmitter<ColumnHeader>();
+  @Output() loadAllColumns = new EventEmitter<null>();
 
   @ViewChild('search')
   private readonly searchField!: ElementRef;
@@ -45,6 +49,7 @@ export class ColumnSelectorComponent implements OnInit, AfterViewInit {
 
   searchInput = '';
   selectedIndex$ = new BehaviorSubject(0);
+  private isActive = false;
 
   ngOnInit() {
     /**
@@ -89,12 +94,12 @@ export class ColumnSelectorComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit() {
     this.searchInput = '';
-    this.searchField.nativeElement.focus();
     this.selectedIndex$.next(0);
-  }
-
-  focus() {
-    this.searchField?.nativeElement.focus();
+    this.activate();
+    // Wait until next tick to prevent https://angular.io/errors/NG0100
+    setTimeout(() => {
+      this.searchField?.nativeElement.focus();
+    });
   }
 
   getFilteredColumns() {
@@ -121,13 +126,27 @@ export class ColumnSelectorComponent implements OnInit, AfterViewInit {
     this.columnSelected.emit(header);
   }
 
+  loadAllColumnsClicked() {
+    this.loadAllColumns.emit();
+  }
+
+  activate() {
+    this.isActive = true;
+  }
+
+  deactivate() {
+    this.isActive = false;
+  }
+
   @HostListener('document:keydown.arrowup', ['$event'])
   onUpArrow() {
+    if (!this.isActive) return;
     this.selectedIndex$.next(Math.max(this.selectedIndex$.getValue() - 1, 0));
   }
 
   @HostListener('document:keydown.arrowdown', ['$event'])
   onDownArrow() {
+    if (!this.isActive) return;
     this.selectedIndex$.next(
       Math.min(
         this.selectedIndex$.getValue() + 1,
@@ -138,6 +157,7 @@ export class ColumnSelectorComponent implements OnInit, AfterViewInit {
 
   @HostListener('document:keydown.enter', ['$event'])
   onEnterPressed() {
+    if (!this.isActive) return;
     this.selectColumn(
       this.getFilteredColumns()[this.selectedIndex$.getValue()]
     );

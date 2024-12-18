@@ -110,14 +110,24 @@ export const FeatureFlagMetadataMap: FeatureFlagMetadataMapType<FeatureFlags> =
       queryParamOverride: 'enableScalarColumnCustomization',
       parseValue: parseBoolean,
     },
-    enableHparamsInTimeSeries: {
+    enableScalarColumnContextMenus: {
       defaultValue: false,
-      queryParamOverride: 'enableHparamsInTimeSeries',
+      queryParamOverride: 'enableScalarColumnContextMenus',
       parseValue: parseBoolean,
     },
     enableSuggestedCards: {
       defaultValue: false,
       queryParamOverride: 'enableSuggestedCards',
+      parseValue: parseBoolean,
+    },
+    enableGlobalPins: {
+      defaultValue: true,
+      queryParamOverride: 'enableGlobalPins',
+      parseValue: parseBoolean,
+    },
+    enableColorByExperiment: {
+      defaultValue: false,
+      queryParamOverride: 'enableColorByExperiment',
       parseValue: parseBoolean,
     },
   };

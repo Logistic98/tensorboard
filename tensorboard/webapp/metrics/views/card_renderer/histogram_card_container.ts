@@ -65,6 +65,7 @@ type HistogramCardMetadata = CardMetadata & {
 };
 
 @Component({
+  standalone: false,
   selector: 'histogram-card',
   template: `
     <histogram-card-component
@@ -98,7 +99,13 @@ type HistogramCardMetadata = CardMetadata & {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HistogramCardContainer implements CardRenderer, OnInit {
-  constructor(private readonly store: Store<State>) {}
+  constructor(private readonly store: Store<State>) {
+    this.mode$ = this.store.select(getMetricsHistogramMode);
+    this.xAxisType$ = this.store.select(getMetricsXAxisType);
+    this.showFullWidth$ = this.store
+      .select(getCardStateMap)
+      .pipe(map((map) => map[this.cardId]?.fullWidth));
+  }
 
   @Input() cardId!: CardId;
   @Input() groupName!: string | null;
@@ -110,11 +117,9 @@ export class HistogramCardContainer implements CardRenderer, OnInit {
   tag$?: Observable<string>;
   runId$?: Observable<string>;
   data$?: Observable<HistogramDatum[]>;
-  mode$ = this.store.select(getMetricsHistogramMode);
-  xAxisType$ = this.store.select(getMetricsXAxisType);
-  readonly showFullWidth$ = this.store
-    .select(getCardStateMap)
-    .pipe(map((map) => map[this.cardId]?.fullWidth));
+  mode$;
+  xAxisType$;
+  readonly showFullWidth$;
   isPinned$?: Observable<boolean>;
   linkedTimeSelection$?: Observable<TimeSelectionView | null>;
   isClosestStepHighlighted$?: Observable<boolean | null>;

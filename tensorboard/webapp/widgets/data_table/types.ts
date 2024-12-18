@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-
 /**
  * This enum defines the columns available in the data table. The
  * ScalarCardComponent must know which piece of data is associated with each
@@ -23,6 +22,7 @@ export enum ColumnHeaderType {
   RELATIVE_TIME = 'RELATIVE_TIME',
   RUN = 'RUN',
   STEP = 'STEP',
+  EXPERIMENT = 'EXPERIMENT',
   TIME = 'TIME',
   VALUE = 'VALUE',
   SMOOTHED = 'SMOOTHED',
@@ -39,13 +39,54 @@ export enum ColumnHeaderType {
   MEAN = 'MEAN',
   RAW_CHANGE = 'RAW_CHANGE',
   HPARAM = 'HPARAM',
+  METRIC = 'METRIC',
+  CUSTOM = 'CUSTOM',
 }
 
-export interface ColumnHeader {
+export enum DomainType {
+  DISCRETE,
+  INTERVAL,
+}
+
+export type DiscreteFilterValues = string[] | number[] | boolean[];
+
+export type DiscreteFilterValue = DiscreteFilterValues[number];
+
+export interface DiscreteFilter {
+  type: DomainType.DISCRETE;
+  includeUndefined: boolean;
+  possibleValues: DiscreteFilterValues;
+  // Subset of `possibleValues`
+  filterValues: DiscreteFilterValues;
+}
+
+export interface IntervalFilter {
+  type: DomainType.INTERVAL;
+  includeUndefined: boolean;
+  minValue: number;
+  maxValue: number;
+  // Filter values have to be in between min and max values (inclusive).
+  filterLowerValue: number;
+  filterUpperValue: number;
+}
+
+export interface FilterAddedEvent {
+  name: string;
+  value: IntervalFilter | DiscreteFilter;
+}
+
+export declare interface ColumnHeader {
   type: ColumnHeaderType;
   name: string;
   displayName: string;
   enabled: boolean;
+  tags?: string[];
+
+  // Default to false when not specified.
+  removable?: boolean;
+  sortable?: boolean;
+  movable?: boolean;
+  filterable?: boolean;
 }
 
 export enum SortingOrder {
@@ -54,11 +95,6 @@ export enum SortingOrder {
 }
 
 export interface SortingInfo {
-  // Currently in the process of moving from header to name.
-  // Header is no longer used but is required as to not break sync
-  // TODO(jameshollyer): Remove header once all internal code is switched
-  // to using name.
-  header?: ColumnHeaderType;
   name: string;
   order: SortingOrder;
 }
@@ -68,11 +104,40 @@ export interface SortingInfo {
  * DataTable. It will have a value for each required ColumnHeader for a given
  * run.
  */
-export type TableData = Record<string, string | number> & {
+export type TableData = Record<string, string | number | boolean | object> & {
   id: string;
 };
 
 export enum DataTableMode {
   SINGLE,
   RANGE,
+}
+
+export enum Side {
+  RIGHT,
+  LEFT,
+}
+
+export interface ReorderColumnEvent {
+  source: ColumnHeader;
+  destination: ColumnHeader;
+  side?: Side | undefined; // Only used when destination is not found.
+}
+
+export interface AddColumnEvent {
+  column: ColumnHeader;
+  nextTo?: ColumnHeader | undefined;
+  side?: Side | undefined;
+}
+
+export enum ColumnGroup {
+  RUN = 'RUN',
+  EXPERIMENT_ALIAS = 'EXPERIMENT_ALIAS',
+  HPARAM = 'HPARAM',
+  OTHER = 'OTHER',
+}
+
+export enum AddColumnSize {
+  DEFAULT = 'DEFAULT',
+  SMALL = 'SMALL',
 }

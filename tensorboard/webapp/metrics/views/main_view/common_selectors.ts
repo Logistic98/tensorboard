@@ -20,19 +20,20 @@ import {
   getMetricsTagMetadata,
   getExperimentIdsFromRoute,
   getExperimentIdToExperimentAliasMap,
-  getExperimentNames,
   getRunColorMap,
   getRunSelectorRegexFilter,
   getRouteKind,
-  getRunsFromExperimentIds,
+  getDashboardRuns,
   getColumnHeadersForCard,
-  getCardMetadata,
+  getDashboardExperimentNames,
 } from '../../../selectors';
 import {DeepReadonly} from '../../../util/types';
 import {
-  getHparamFilterMapFromExperimentIds,
-  getMetricFilterMapFromExperimentIds,
-  getExperimentsHparamsAndMetricsSpecs,
+  getDashboardDefaultHparamFilters,
+  getDashboardDisplayedHparamColumns,
+  getDashboardHparamFilterMap,
+  getDashboardHparamSpecs,
+  getDashboardMetricsFilterMap,
 } from '../../../hparams/_redux/hparams_selectors';
 import {
   DiscreteFilter,
@@ -186,101 +187,120 @@ const utils = {
   },
 };
 
-const getRenderableRuns = memoize((experimentIds: string[]) => {
-  return createSelector(
-    getRunsFromExperimentIds(experimentIds),
-    getExperimentNames(experimentIds),
-    getCurrentRouteRunSelection,
-    getRunColorMap,
-    getExperimentIdToExperimentAliasMap,
-    (
-      runs,
-      experimentNames,
-      selectionMap,
-      colorMap,
-      experimentIdToAlias
-    ): Array<RunTableExperimentItem> => {
-      return runs.map((run) => {
-        const hparamMap: RunTableItem['hparams'] = new Map();
-        (run.hparams || []).forEach((hparam) => {
-          hparamMap.set(hparam.name, hparam.value);
-        });
-        const metricMap: RunTableItem['metrics'] = new Map();
-        (run.metrics || []).forEach((metric) => {
-          metricMap.set(metric.tag, metric.value);
-        });
-        return {
-          run,
-          experimentName: experimentNames[run.experimentId] || '',
-          experimentAlias: experimentIdToAlias[run.experimentId],
-          selected: Boolean(selectionMap && selectionMap.get(run.id)),
-          runColor: colorMap[run.id],
-          hparams: hparamMap,
-          metrics: metricMap,
-        };
-      });
-    }
-  );
-});
-
-const getFilteredRenderableRuns = memoize((experimentIds: string[]) => {
-  return createSelector(
-    getRunSelectorRegexFilter,
-    getRenderableRuns(experimentIds),
-    getHparamFilterMapFromExperimentIds(experimentIds),
-    getMetricFilterMapFromExperimentIds(experimentIds),
-    getRouteKind,
-    (regexFilter, runItems, hparamFilters, metricFilters, routeKind) => {
-      const regexFilteredItems = utils.filterRunItemsByRegex(
-        runItems,
-        regexFilter,
-        routeKind === RouteKind.COMPARE_EXPERIMENT
-      );
-
-      return utils.filterRunItemsByHparamAndMetricFilter(
-        regexFilteredItems,
-        hparamFilters,
-        metricFilters
-      );
-    }
-  );
-});
-
-export const getFilteredRenderableRunsFromRoute = createSelector(
-  (state) => state,
-  getExperimentIdsFromRoute,
-  (state, experimentIds) => {
-    return getFilteredRenderableRuns(experimentIds || [])(state);
+export const getCurrentColumnFilters = createSelector(
+  getDashboardDefaultHparamFilters,
+  getDashboardHparamFilterMap,
+  getDashboardMetricsFilterMap,
+  (defaultHparamsFilters, hparamFilters, metricFilters) => {
+    return new Map([
+      ...defaultHparamsFilters,
+      ...hparamFilters,
+      ...metricFilters,
+    ]);
   }
 );
 
-export const getFilteredRenderableRunsIdsFromRoute = createSelector(
-  getFilteredRenderableRunsFromRoute,
+const getRenderableRuns = createSelector(
+  getDashboardRuns,
+  getDashboardExperimentNames,
+  getCurrentRouteRunSelection,
+  getRunColorMap,
+  getExperimentIdToExperimentAliasMap,
+  (
+    runs,
+    experimentNames,
+    selectionMap,
+    colorMap,
+    experimentIdToAlias
+  ): Array<RunTableExperimentItem> => {
+    return runs.map((run) => {
+      const hparamMap: RunTableItem['hparams'] = new Map();
+      (run.hparams || []).forEach((hparam) => {
+        hparamMap.set(hparam.name, hparam.value);
+      });
+      const metricMap: RunTableItem['metrics'] = new Map();
+      (run.metrics || []).forEach((metric) => {
+        metricMap.set(metric.tag, metric.value);
+      });
+      return {
+        run,
+        experimentName: experimentNames[run.experimentId] || '',
+        experimentAlias: experimentIdToAlias[run.experimentId],
+        selected: Boolean(selectionMap && selectionMap.get(run.id)),
+        runColor: colorMap[run.id],
+        hparams: hparamMap,
+        metrics: metricMap,
+      };
+    });
+  }
+);
+
+export const getFilteredRenderableRuns = createSelector(
+  getRunSelectorRegexFilter,
+  getRenderableRuns,
+  getDashboardHparamFilterMap,
+  getDashboardMetricsFilterMap,
+  getRouteKind,
+  (
+    regexFilter,
+    runItems,
+    hparamFilters,
+    metricFilters,
+    routeKind
+  ): RunTableItem[] => {
+    const regexFilteredItems = utils.filterRunItemsByRegex(
+      runItems,
+      regexFilter,
+      routeKind === RouteKind.COMPARE_EXPERIMENT
+    );
+
+    return utils.filterRunItemsByHparamAndMetricFilter(
+      regexFilteredItems,
+      hparamFilters,
+      metricFilters
+    );
+  }
+);
+
+export const getFilteredRenderableRunsIds = createSelector(
+  getFilteredRenderableRuns,
   (filteredRenderableRuns) => {
     return new Set(filteredRenderableRuns.map(({run: {id}}) => id));
   }
 );
 
 export const getPotentialHparamColumns = createSelector(
-  (state: State) => state,
+  getDashboardHparamSpecs,
   getExperimentIdsFromRoute,
-  (state, experimentIds): ColumnHeader[] => {
+  (hparamSpecs, experimentIds): ColumnHeader[] => {
     if (!experimentIds) {
       return [];
     }
 
-    const {hparams} = getExperimentsHparamsAndMetricsSpecs(state, {
-      experimentIds,
-    });
-
-    return hparams.map((spec) => ({
+    return hparamSpecs.map((hparamSpec) => ({
       type: ColumnHeaderType.HPARAM,
-      name: spec.name,
+      name: hparamSpec.name,
       // According to the api spec when the displayName is empty, the name should
       // be displayed tensorboard/plugins/hparams/api.proto
-      displayName: spec.displayName || spec.name,
+      displayName: hparamSpec.displayName || hparamSpec.name,
       enabled: false,
+      tags: hparamSpec.differs ? ['differs'] : [],
+      removable: true,
+      sortable: true,
+      movable: true,
+      filterable: true,
     }));
+  }
+);
+
+export const getSelectableColumns = createSelector(
+  getPotentialHparamColumns,
+  getDashboardDisplayedHparamColumns,
+  (potentialColumns, currentColumns) => {
+    const currentColumnNames = new Set(currentColumns.map(({name}) => name));
+    return potentialColumns.filter((columnHeader) => {
+      return !currentColumnNames.has(columnHeader.name);
+    });
   }
 );
 
@@ -294,13 +314,10 @@ export const getAllPotentialColumnsForCard = memoize((cardId: string) => {
   );
 });
 
-export const factories = {
-  getRenderableRuns,
-  getFilteredRenderableRuns,
-};
-
 export const TEST_ONLY = {
+  getRenderableRuns,
   getRenderableCardIdsWithMetadata,
   getScalarTagsForRunSelection,
+  getCurrentColumnFilters,
   utils,
 };

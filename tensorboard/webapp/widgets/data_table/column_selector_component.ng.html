@@ -12,16 +12,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 <div class="contents">
-  <mat-form-field class="search-area">
+  <mat-form-field class="search-area" subscriptSizing="dynamic">
     <mat-icon matPrefix class="search-icon" svgIcon="search_24px"></mat-icon>
+    <mat-label>Search</mat-label>
     <input
       matInput
       #search
       [(ngModel)]="searchInput"
-      placeholder="Search"
       (ngModelChange)="searchInputChanged()"
     />
   </mat-form-field>
+
+  <div class="column-load-info">
+    <label>{{ numColumnsLoaded }} columns loaded.</label>
+    <div *ngIf="hasMoreColumnsToLoad" class="load-more-columns">
+      <label>
+        Warning: There were too many columns to load all of them efficiently.
+      </label>
+      <button mat-stroked-button (click)="loadAllColumnsClicked()">
+        Load all anyway
+      </button>
+    </div>
+  </div>
 
   <div #columnList class="column-list">
     <button
@@ -32,8 +44,11 @@ limitations under the License.
         'selected': i === (selectedIndex$ | async)
       }"
       (click)="selectColumn(column)"
+      [matTooltip]="column.name"
+      [matTooltipDisabled]="column.name.localeCompare(column.displayName, undefined, {sensitivity: 'accent'}) === 0"
     >
       {{column.displayName}}
+      <span *ngFor="let tag of column.tags" class="tag"> {{ tag }} </span>
     </button>
   </div>
 </div>

@@ -70,6 +70,7 @@ export interface TemplateContext {
 }
 
 @Component({
+  standalone: false,
   selector: 'line-chart',
   templateUrl: 'line_chart_component.ng.html',
   styleUrls: ['line_chart_component.css'],
@@ -141,6 +142,8 @@ export class LineChartComponent
 
   @Input()
   lineOnly?: boolean = false;
+
+  @Input() disableTooltip?: boolean = false;
 
   @Output()
   viewBoxChanged = new EventEmitter<Extent | null>();

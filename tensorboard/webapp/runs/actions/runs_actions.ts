@@ -17,9 +17,8 @@ limitations under the License.
  */
 
 import {createAction, props} from '@ngrx/store';
-import {SortDirection} from '../../types/ui';
 import {Run} from '../data_source/runs_data_source_types';
-import {ExperimentIdToRunsAndMetadata, GroupBy, SortKey} from '../types';
+import {ExperimentIdToRuns, GroupBy} from '../types';
 import {ColumnHeader, SortingInfo} from '../../widgets/data_table/types';
 
 /**
@@ -40,7 +39,8 @@ export const fetchRunsSucceeded = createAction(
   props<{
     experimentIds: string[];
     runsForAllExperiments: Run[];
-    newRunsAndMetadata: ExperimentIdToRunsAndMetadata;
+    newRuns: ExperimentIdToRuns;
+    expNameByExpId?: Record<string, string>;
   }>()
 );
 
@@ -68,16 +68,6 @@ export const runPageSelectionToggled = createAction(
   props<{runIds: string[]}>()
 );
 
-export const runSelectorPaginationOptionChanged = createAction(
-  '[Runs] Run Selector Pagination Option Changed',
-  props<{pageSize: number; pageIndex: number}>()
-);
-
-export const runSelectorSortChanged = createAction(
-  '[Runs] Run Selector Sort Changed',
-  props<{key: SortKey; direction: SortDirection}>()
-);
-
 export const runSelectorRegexFilterChanged = createAction(
   '[Runs] Run Selector Regex Filter Changed',
   props<{regexString: string}>()
@@ -88,14 +78,13 @@ export const runColorChanged = createAction(
   props<{runId: string; newColor: string}>()
 );
 
-export const runTableShown = createAction(
-  '[Runs] Run Table Shown',
-  props<{experimentIds: string[]}>()
-);
-
 export const runGroupByChanged = createAction(
   '[Runs] Run Group By Changed',
-  props<{experimentIds: string[]; groupBy: GroupBy}>()
+  props<{
+    experimentIds: string[];
+    groupBy: GroupBy;
+    expNameByExpId?: Record<string, string>;
+  }>()
 );
 
 /**
@@ -104,6 +93,22 @@ export const runGroupByChanged = createAction(
 export const runsTableHeaderAdded = createAction(
   '[Runs] Runs Table Header Added',
   props<{header: ColumnHeader; index?: number}>()
+);
+
+/**
+ * Removes the provided header
+ */
+export const runsTableHeaderRemoved = createAction(
+  '[Runs] Runs Table Header Removed',
+  props<{header: ColumnHeader}>()
+);
+
+/**
+ * Users requested to change the order of the columns in the runs table.
+ */
+export const runsTableHeaderOrderChanged = createAction(
+  '[Runs] Runs Table Header Order Changed',
+  props<{newHeaderOrder: ColumnHeader[]}>()
 );
 
 /**

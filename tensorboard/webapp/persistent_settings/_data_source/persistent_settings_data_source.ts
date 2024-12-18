@@ -15,11 +15,30 @@ limitations under the License.
 import {Injectable} from '@angular/core';
 import {EMPTY, Observable, of} from 'rxjs';
 import {map, tap} from 'rxjs/operators';
+import {ColumnHeader} from '../../widgets/data_table/types';
 import {BackendSettings, PersistableSettings, ThemeValue} from './types';
 
 const LEGACY_METRICS_LOCAL_STORAGE_KEY = '_tb_global_settings.timeseries';
 const GLOBAL_LOCAL_STORAGE_KEY = '_tb_global_settings';
 const NOTIFICATION_LAST_READ_TIME_KEY = 'notificationLastReadTimestamp';
+
+/** Updates context menu related properties for given headers.
+ *
+ * Useful for correcting properties that were saved to backend in a possibly inconsistent state.
+ */
+function updateScalarContextMenuOptions(headers: ColumnHeader[]) {
+  headers.forEach((header) => {
+    header.sortable = true;
+
+    if (header.type === 'RUN') {
+      header.movable = false;
+      header.removable = false;
+    } else {
+      header.movable = true;
+      header.removable = true;
+    }
+  });
+}
 
 @Injectable()
 export abstract class PersistentSettingsDataSource<UiSettings> {
@@ -101,6 +120,13 @@ export class OSSSettingsConverter extends SettingsConverter<
     if (settings.rangeSelectionHeaders !== undefined) {
       serializableSettings.rangeSelectionHeaders =
         settings.rangeSelectionHeaders;
+    }
+    if (settings.dashboardDisplayedHparamColumns !== undefined) {
+      serializableSettings.dashboardDisplayedHparamColumns =
+        settings.dashboardDisplayedHparamColumns;
+    }
+    if (settings.savingPinsEnabled !== undefined) {
+      serializableSettings.savingPinsEnabled = settings.savingPinsEnabled;
     }
     return serializableSettings;
   }
@@ -211,17 +237,33 @@ export class OSSSettingsConverter extends SettingsConverter<
     if (
       Array.isArray(backendSettings.singleSelectionHeaders) &&
       // If the settings stored in the backend are invalid, reset back to default.
-      backendSettings.singleSelectionHeaders[0].name !== undefined
+      backendSettings.singleSelectionHeaders[0].name !== undefined &&
+      backendSettings.singleSelectionHeaders[0].type === 'RUN'
     ) {
+      updateScalarContextMenuOptions(backendSettings.singleSelectionHeaders);
       settings.singleSelectionHeaders = backendSettings.singleSelectionHeaders;
     }
 
     if (
       Array.isArray(backendSettings.rangeSelectionHeaders) &&
       // If the settings stored in the backend are invalid, reset back to default.
-      backendSettings.rangeSelectionHeaders[0].name !== undefined
+      backendSettings.rangeSelectionHeaders[0].name !== undefined &&
+      backendSettings.rangeSelectionHeaders[0].type === 'RUN'
     ) {
+      updateScalarContextMenuOptions(backendSettings.rangeSelectionHeaders);
       settings.rangeSelectionHeaders = backendSettings.rangeSelectionHeaders;
+    }
+
+    if (Array.isArray(backendSettings.dashboardDisplayedHparamColumns)) {
+      settings.dashboardDisplayedHparamColumns =
+        backendSettings.dashboardDisplayedHparamColumns;
+    }
+
+    if (
+      backendSettings.hasOwnProperty('savingPinsEnabled') &&
+      typeof backendSettings.savingPinsEnabled === 'boolean'
+    ) {
+      settings.savingPinsEnabled = backendSettings.savingPinsEnabled;
     }
 
     return settings;

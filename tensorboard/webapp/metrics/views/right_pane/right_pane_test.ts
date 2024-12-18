@@ -19,6 +19,7 @@ import {
   TestBed,
   tick,
 } from '@angular/core/testing';
+import {OverlayContainer} from '@angular/cdk/overlay';
 import {MatButtonToggleModule} from '@angular/material/button-toggle';
 import {MatCheckboxModule} from '@angular/material/checkbox';
 import {MatSelectModule} from '@angular/material/select';
@@ -37,10 +38,13 @@ import {HistogramMode, TooltipSort, XAxisType} from '../../types';
 import {RightPaneComponent} from './right_pane_component';
 import {SettingsViewComponent, TEST_ONLY} from './settings_view_component';
 import {SettingsViewContainer} from './settings_view_container';
+import {SavingPinsDialogModule} from './saving_pins_dialog/saving_pins_dialog_module';
+import {SavingPinsCheckboxComponent} from './saving_pins_checkbox_component';
 
 describe('metrics right_pane', () => {
   let store: MockStore<State>;
   let dispatchSpy: jasmine.Spy;
+  let overlayContainer: OverlayContainer;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -49,6 +53,7 @@ describe('metrics right_pane', () => {
         DropdownModule,
         MatButtonToggleModule,
         MatCheckboxModule,
+        SavingPinsDialogModule,
         MatSelectModule,
         MatSliderModule,
       ],
@@ -56,6 +61,7 @@ describe('metrics right_pane', () => {
         RightPaneComponent,
         SettingsViewComponent,
         SettingsViewContainer,
+        SavingPinsCheckboxComponent,
       ],
       providers: [provideMockTbStore()],
       // Ignore errors from components that are out-of-scope for this test:
@@ -65,6 +71,7 @@ describe('metrics right_pane', () => {
 
     store = TestBed.inject<Store<State>>(Store) as MockStore<State>;
     dispatchSpy = spyOn(store, 'dispatch');
+    overlayContainer = TestBed.inject(OverlayContainer);
   });
 
   afterEach(() => {
@@ -113,8 +120,9 @@ describe('metrics right_pane', () => {
     });
 
     function getMatSliderValue(el: DebugElement): string {
-      return el.query(By.css('.mat-slider-thumb-label-text')).nativeElement
-        .textContent;
+      return el
+        .query(By.css('input'))
+        .nativeElement.getAttribute('aria-valuetext');
     }
 
     function select(
@@ -124,7 +132,7 @@ describe('metrics right_pane', () => {
       return fixture.debugElement.query(By.css(cssSelector));
     }
 
-    it('renders', () => {
+    it('renders', fakeAsync(() => {
       store.overrideSelector(
         selectors.getMetricsTooltipSort,
         TooltipSort.ALPHABETICAL
@@ -142,6 +150,8 @@ describe('metrics right_pane', () => {
 
       const fixture = TestBed.createComponent(SettingsViewContainer);
       fixture.detectChanges();
+      tick(10);
+      fixture.detectChanges();
 
       const tooltipSortSelect = select(fixture, '.tooltip-sort tb-dropdown');
       // In the test setting, material component's DOM does not reflect the
@@ -151,14 +161,13 @@ describe('metrics right_pane', () => {
       );
 
       expect(
-        select(fixture, '.scalars-ignore-outliers input').attributes[
-          'aria-checked'
-        ]
-      ).toBe('false');
+        select(fixture, '.scalars-ignore-outliers input').componentInstance
+          .checked
+      ).toBeFalse();
 
       expect(
-        select(fixture, '.scalars-partition-x input').attributes['aria-checked']
-      ).toBe('true');
+        select(fixture, '.scalars-partition-x input').componentInstance.checked
+      ).toBeTrue();
 
       const xAxisTypeSelect = select(fixture, '.x-axis-type tb-dropdown');
       expect(xAxisTypeSelect.componentInstance.value).toBe(XAxisType.STEP);
@@ -178,7 +187,7 @@ describe('metrics right_pane', () => {
       expect(scalarSmoothingInput.nativeElement.value).toBe('0.3');
       expect(
         getMatSliderValue(select(fixture, '.scalars-smoothing mat-slider'))
-      ).toBe('0.30');
+      ).toBe('0.3');
 
       expect(
         getMatSliderValue(select(fixture, '.image-brightness mat-slider'))
@@ -189,11 +198,10 @@ describe('metrics right_pane', () => {
       ).toBe('0.2');
 
       expect(
-        select(fixture, '.image-show-actual-size input').attributes[
-          'aria-checked'
-        ]
-      ).toBe('true');
-    });
+        select(fixture, '.image-show-actual-size input').componentInstance
+          .checked
+      ).toBeTrue();
+    }));
 
     it('hides settings if images are not supported', () => {
       store.overrideSelector(selectors.getIsMetricsImageSupportEnabled, false);
@@ -331,9 +339,9 @@ describe('metrics right_pane', () => {
       it('dispatches metricsChangeCardWidth action when adjusting the slider', fakeAsync(() => {
         const fixture = TestBed.createComponent(SettingsViewContainer);
         fixture.detectChanges();
-        const slider = select(fixture, CARD_WIDTH_SLIDER);
+        const sliderThumb = select(fixture, '.card-width mat-slider input');
 
-        slider.triggerEventHandler('input', {value: 350});
+        sliderThumb.triggerEventHandler('valueChange', 350);
         tick(TEST_ONLY.SLIDER_AUDIT_TIME_MS);
 
         expect(dispatchSpy).toHaveBeenCalledOnceWith(
@@ -353,15 +361,20 @@ describe('metrics right_pane', () => {
         );
       });
 
-      it('sets the card width to the value provided', () => {
+      it('sets the card width to the value provided', fakeAsync(() => {
         store.overrideSelector(selectors.getMetricsCardMinWidth, 400);
         const fixture = TestBed.createComponent(SettingsViewContainer);
         fixture.detectChanges();
 
-        expect(getMatSliderValue(select(fixture, CARD_WIDTH_SLIDER))).toBe(
-          '400'
-        );
-      });
+        // For some unknown reason sliders which do not display a thumb do not
+        // update aria-valuetext properly in tests. As a workaround I am using
+        // the ng-reflect-value attribute for this test.
+        expect(
+          select(fixture, CARD_WIDTH_SLIDER)
+            .query(By.css('input'))
+            .nativeElement.getAttribute('ng-reflect-value')
+        ).toBe('400');
+      }));
 
       it('does not set invalid value', () => {
         store.overrideSelector(selectors.getMetricsCardMinWidth, null);
@@ -402,7 +415,7 @@ describe('metrics right_pane', () => {
 
         const el = fixture.debugElement.query(By.css('.linked-time'));
         const [enabled] = el.queryAll(By.css('mat-checkbox input'));
-        expect(enabled.nativeElement.ariaChecked).toBe('false');
+        expect(enabled.nativeElement.checked).toBeFalse();
 
         enabled.nativeElement.click();
 
@@ -415,7 +428,7 @@ describe('metrics right_pane', () => {
         store.overrideSelector(selectors.getMetricsLinkedTimeEnabled, true);
         store.refreshState();
         fixture.detectChanges();
-        expect(enabled.nativeElement.ariaChecked).toBe('true');
+        expect(enabled.nativeElement.checked).toBeTrue();
       });
     });
 
@@ -425,10 +438,9 @@ describe('metrics right_pane', () => {
         fixture.detectChanges();
 
         expect(
-          select(fixture, '.scalars-step-selector input').attributes[
-            'aria-checked'
-          ]
-        ).toBe('false');
+          select(fixture, '.scalars-step-selector input').componentInstance
+            .checked
+        ).toBeFalse();
       });
 
       it('renders checked feature', () => {
@@ -437,10 +449,9 @@ describe('metrics right_pane', () => {
         fixture.detectChanges();
 
         expect(
-          select(fixture, '.scalars-step-selector input').attributes[
-            'aria-checked'
-          ]
-        ).toBe('true');
+          select(fixture, '.scalars-step-selector input').componentInstance
+            .checked
+        ).toBeTrue();
       });
 
       it('dispatches stepSelectorEnableToggled on toggle', () => {
@@ -542,6 +553,91 @@ describe('metrics right_pane', () => {
           fixture.debugElement.query(By.css('.column-edit-menu-toggle'))
             .nativeElement
         ).toHaveClass('toggle-opened');
+      });
+    });
+
+    describe('saving pins check box', () => {
+      beforeEach(() => {
+        store.overrideSelector(selectors.getEnableGlobalPins, true);
+        store.overrideSelector(selectors.getMetricsSavingPinsEnabled, false);
+      });
+
+      it('does not render if getEnableGlobalPins feature flag is false', () => {
+        store.overrideSelector(selectors.getEnableGlobalPins, false);
+        const fixture = TestBed.createComponent(SettingsViewContainer);
+        fixture.detectChanges();
+
+        expect(select(fixture, '.saving-pins')).toBeFalsy();
+      });
+
+      it('renders checked saving pins check box if isSavingpinsEnabled is true', () => {
+        store.overrideSelector(selectors.getMetricsSavingPinsEnabled, true);
+
+        const fixture = TestBed.createComponent(SettingsViewContainer);
+        fixture.detectChanges();
+
+        expect(
+          select(fixture, '.saving-pins input').componentInstance.checked
+        ).toBeTrue();
+      });
+
+      it('dispatches metricsEnableSavingPinsToggled if user checks the box', () => {
+        const fixture = TestBed.createComponent(SettingsViewContainer);
+        fixture.detectChanges();
+
+        const checkbox = select(fixture, '.saving-pins input');
+        checkbox.nativeElement.click();
+
+        const savingPinsDialog = overlayContainer
+          .getContainerElement()
+          .querySelectorAll('saving-pins-dialog');
+        expect(savingPinsDialog.length).toBe(0);
+        expect(dispatchSpy).toHaveBeenCalledWith(
+          actions.metricsEnableSavingPinsToggled()
+        );
+      });
+
+      it('dispatches metricsEnableSavingPinsToggled if users clicks disable in the dialog', async () => {
+        store.overrideSelector(selectors.getMetricsSavingPinsEnabled, true);
+        const fixture = TestBed.createComponent(SettingsViewContainer);
+        fixture.detectChanges();
+
+        const checkbox = select(fixture, '.saving-pins input');
+        checkbox.nativeElement.click();
+
+        const savingPinsDialog = overlayContainer
+          .getContainerElement()
+          .querySelectorAll('saving-pins-dialog');
+
+        const disableButton = overlayContainer
+          .getContainerElement()
+          .querySelector('.disable-button');
+        (disableButton as HTMLButtonElement).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(savingPinsDialog.length).toBe(1);
+        expect(dispatchSpy).toHaveBeenCalledWith(
+          actions.metricsEnableSavingPinsToggled()
+        );
+      });
+
+      it('does not dispatch metricsEnableSavingPinsToggled if users cancels the dialog', async () => {
+        store.overrideSelector(selectors.getMetricsSavingPinsEnabled, true);
+        const fixture = TestBed.createComponent(SettingsViewContainer);
+        fixture.detectChanges();
+
+        const checkbox = select(fixture, '.saving-pins input');
+        checkbox.nativeElement.click();
+
+        const disableButton = overlayContainer
+          .getContainerElement()
+          .querySelector('.cancel-button');
+        (disableButton as HTMLButtonElement).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(dispatchSpy).not.toHaveBeenCalled();
       });
     });
   });

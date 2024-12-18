@@ -58,12 +58,16 @@ import {
 } from './scalar_card_types';
 import {
   ColumnHeader,
-  ColumnHeaderType,
   DataTableMode,
   SortingInfo,
   SortingOrder,
+  DiscreteFilter,
+  IntervalFilter,
+  FilterAddedEvent,
+  AddColumnEvent,
 } from '../../../widgets/data_table/types';
 import {isDatumVisible, TimeSelectionView} from './utils';
+import {RunToHparamMap} from '../../../runs/types';
 
 type ScalarTooltipDatum = TooltipDatum<
   ScalarCardSeriesMetadata & {
@@ -72,6 +76,7 @@ type ScalarTooltipDatum = TooltipDatum<
 >;
 
 @Component({
+  standalone: false,
   selector: 'scalar-card-component',
   templateUrl: 'scalar_card_component.ng.html',
   styleUrls: ['scalar_card_component.css'],
@@ -101,13 +106,18 @@ export class ScalarCardComponent<Downloader> {
   @Input() useDarkMode!: boolean;
   @Input() forceSvg!: boolean;
   @Input() columnCustomizationEnabled!: boolean;
+  @Input() columnContextMenusEnabled!: boolean;
   @Input() linkedTimeSelection: TimeSelectionView | undefined;
   @Input() stepOrLinkedTimeSelection: TimeSelection | undefined;
   @Input() minMaxStep!: MinMaxStep;
   @Input() userViewBox!: Extent | null;
   @Input() columnHeaders!: ColumnHeader[];
   @Input() rangeEnabled!: boolean;
-  @Input() hparamsEnabled?: boolean;
+  @Input() columnFilters!: Map<string, DiscreteFilter | IntervalFilter>;
+  @Input() selectableColumns!: ColumnHeader[];
+  @Input() numColumnsLoaded!: number;
+  @Input() numColumnsToLoad!: number;
+  @Input() runToHparamMap!: RunToHparamMap;
 
   @Output() onFullSizeToggle = new EventEmitter<void>();
   @Output() onPinClicked = new EventEmitter<boolean>();
@@ -120,10 +130,12 @@ export class ScalarCardComponent<Downloader> {
   @Output() onDataTableSorting = new EventEmitter<SortingInfo>();
   @Output() editColumnHeaders = new EventEmitter<HeaderEditInfo>();
   @Output() openTableEditMenuToMode = new EventEmitter<DataTableMode>();
-  @Output() onRemoveColumn = new EventEmitter<HeaderToggleInfo>();
+  @Output() addColumn = new EventEmitter<AddColumnEvent>();
+  @Output() removeColumn = new EventEmitter<HeaderToggleInfo>();
+  @Output() addFilter = new EventEmitter<FilterAddedEvent>();
+  @Output() loadAllColumns = new EventEmitter<null>();
 
   @Output() onLineChartZoom = new EventEmitter<Extent | null>();
-
   @Output() onCardStateChanged = new EventEmitter<Partial<CardState>>();
 
   // Line chart may not exist when was never visible (*ngIf).
@@ -150,13 +162,6 @@ export class ScalarCardComponent<Downloader> {
   sortDataBy(sortingInfo: SortingInfo) {
     this.sortingInfo = sortingInfo;
     this.onDataTableSorting.emit(sortingInfo);
-  }
-
-  removeColumn(headerToggleInfo: HeaderToggleInfo) {
-    this.onRemoveColumn.emit({
-      headerType: headerToggleInfo.headerType,
-      cardId: this.cardId,
-    });
   }
 
   resetDomain() {

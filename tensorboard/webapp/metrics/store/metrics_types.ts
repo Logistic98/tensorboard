@@ -27,6 +27,7 @@ import {
 } from '../data_source';
 import {
   CardId,
+  CardIdWithMetadata,
   CardMetadata,
   CardUniqueInfo,
   HistogramMode,
@@ -166,6 +167,12 @@ export type CardStepIndexMap = Record<
   CardStepIndexMetaData | null
 >;
 
+export type CardInteractions = {
+  tagFilters: string[];
+  pins: CardIdWithMetadata[];
+  clicks: CardIdWithMetadata[];
+};
+
 export type CardToPinnedCard = Map<NonPinnedCardId, PinnedCardId>;
 
 export type PinnedCardToCard = Map<PinnedCardId, NonPinnedCardId>;
@@ -239,12 +246,14 @@ export interface MetricsSettings {
   imageContrastInMilli: number;
   imageShowActualSize: boolean;
   histogramMode: HistogramMode;
+  savingPinsEnabled: boolean;
 }
 
 export interface MetricsNonNamespacedState {
   timeSeriesData: TimeSeriesData;
   isSettingsPaneOpen: boolean;
   isSlideoutMenuOpen: boolean;
+  lastPinnedCardTime: number;
   tableEditorSelectedTab: DataTableMode;
   // Default settings. For the legacy reasons, we cannot change the name of the
   // prop. It either is set by application or a user via settings storage.
@@ -254,6 +263,8 @@ export interface MetricsNonNamespacedState {
    * Map from ElementId to CardId. Only contains all visible cards.
    */
   visibleCardMap: Map<ElementId, CardId>;
+  previousCardInteractions: CardInteractions;
+  newCardInteractions: CardInteractions;
 }
 
 export type MetricsState = NamespaceContextedState<
@@ -277,4 +288,5 @@ export const METRICS_SETTINGS_DEFAULT: MetricsSettings = {
   imageContrastInMilli: 1000,
   imageShowActualSize: false,
   histogramMode: HistogramMode.OFFSET,
+  savingPinsEnabled: true,
 };

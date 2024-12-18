@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 import {NO_ERRORS_SCHEMA} from '@angular/core';
 import {NoopAnimationsModule} from '@angular/platform-browser/animations';
+import {MatCheckboxModule} from '@angular/material/checkbox';
 import {
   ComponentFixture,
   fakeAsync,
@@ -25,7 +26,7 @@ import {Action, Store} from '@ngrx/store';
 import {MockStore, provideMockStore} from '@ngrx/store/testing';
 import {State} from '../../../../app_state';
 import {
-  dataTableColumnEdited,
+  dataTableColumnOrderChanged,
   dataTableColumnToggled,
   metricsSlideoutMenuClosed,
   tableEditorTabChanged,
@@ -38,6 +39,7 @@ import {
 import {
   ColumnHeaderType,
   DataTableMode,
+  Side,
 } from '../../../../widgets/data_table/types';
 import {DataTableHeaderModule} from '../../../../widgets/data_table/data_table_header_module';
 import {ScalarColumnEditorComponent} from './scalar_column_editor_component';
@@ -60,7 +62,7 @@ describe('scalar column editor', () => {
     let index = mode === DataTableMode.SINGLE ? 0 : 1;
     // Get mat-tab to queue the task of switching tabs
     fixture.debugElement
-      .queryAll(By.css('.mat-tab-label'))
+      .queryAll(By.css('.mat-mdc-tab'))
       [index].nativeElement.click();
     fixture.detectChanges();
 
@@ -72,7 +74,12 @@ describe('scalar column editor', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DataTableHeaderModule, MatTabsModule, NoopAnimationsModule],
+      imports: [
+        DataTableHeaderModule,
+        MatTabsModule,
+        NoopAnimationsModule,
+        MatCheckboxModule,
+      ],
       declarations: [ScalarColumnEditorContainer, ScalarColumnEditorComponent],
       providers: [provideMockStore()],
       schemas: [NO_ERRORS_SCHEMA],
@@ -95,9 +102,9 @@ describe('scalar column editor', () => {
   it('renders single selection headers when selectedTab is set to SINGLE', fakeAsync(() => {
     store.overrideSelector(getSingleSelectionHeaders, [
       {
-        type: ColumnHeaderType.RUN,
-        name: 'run',
-        displayName: 'Run',
+        type: ColumnHeaderType.SMOOTHED,
+        name: 'smoothed',
+        displayName: 'Smoothed',
         enabled: true,
       },
       {
@@ -115,16 +122,16 @@ describe('scalar column editor', () => {
     );
 
     expect(headerElements.length).toEqual(2);
-    expect(headerElements[0].nativeElement.innerText).toEqual('Run');
+    expect(headerElements[0].nativeElement.innerText).toEqual('Smoothed');
     expect(headerElements[1].nativeElement.innerText).toEqual('Value');
   }));
 
   it('renders range selection headers when selectedTab is set to RANGE', fakeAsync(() => {
     store.overrideSelector(getRangeSelectionHeaders, [
       {
-        type: ColumnHeaderType.RUN,
-        name: 'run',
-        displayName: 'Run',
+        type: ColumnHeaderType.SMOOTHED,
+        name: 'smoothed',
+        displayName: 'Smoothed',
         enabled: true,
       },
       {
@@ -142,16 +149,62 @@ describe('scalar column editor', () => {
     );
 
     expect(headerElements.length).toEqual(2);
-    expect(headerElements[0].nativeElement.innerText).toEqual('Run');
+    expect(headerElements[0].nativeElement.innerText).toEqual('Smoothed');
     expect(headerElements[1].nativeElement.innerText).toEqual('Value');
   }));
+
+  [
+    {
+      testDesc: 'for singleSelectionHeaders',
+      selector: getSingleSelectionHeaders,
+      mode: DataTableMode.SINGLE,
+    },
+    {
+      testDesc: 'for rangeSelectionHeaders',
+      selector: getRangeSelectionHeaders,
+      mode: DataTableMode.RANGE,
+    },
+  ].forEach(({testDesc, selector, mode}) => {
+    it(`hides the runs column ${testDesc}`, fakeAsync(() => {
+      store.overrideSelector(selector, [
+        {
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'Run',
+          enabled: true,
+        },
+        {
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
+          enabled: true,
+        },
+        {
+          type: ColumnHeaderType.VALUE,
+          name: 'value',
+          displayName: 'Value',
+          enabled: true,
+        },
+      ]);
+      const fixture = createComponent();
+
+      switchTabs(fixture, mode);
+      const headerElements = fixture.debugElement.queryAll(
+        By.css('.header-list-item')
+      );
+
+      expect(headerElements.length).toEqual(2);
+      expect(headerElements[0].nativeElement.innerText).toEqual('Smoothed');
+      expect(headerElements[1].nativeElement.innerText).toEqual('Value');
+    }));
+  });
 
   it('checkboxes reflect enabled state', fakeAsync(() => {
     store.overrideSelector(getSingleSelectionHeaders, [
       {
-        type: ColumnHeaderType.RUN,
-        name: 'run',
-        displayName: 'Run',
+        type: ColumnHeaderType.SMOOTHED,
+        name: 'smoothed',
+        displayName: 'Smoothed',
         enabled: true,
       },
       {
@@ -167,10 +220,16 @@ describe('scalar column editor', () => {
     const checkboxes = fixture.debugElement.queryAll(By.css('mat-checkbox'));
 
     expect(checkboxes.length).toEqual(2);
-    expect(checkboxes[0].nativeElement.innerText).toEqual('Run');
-    expect(checkboxes[0].nativeElement.checked).toBeTrue();
+    expect(checkboxes[0].nativeElement.innerText).toEqual('Smoothed');
+    expect(
+      checkboxes[0].nativeElement.attributes.getNamedItem('ng-reflect-checked')
+        .value
+    ).toEqual('true');
     expect(checkboxes[1].nativeElement.innerText).toEqual('Value');
-    expect(checkboxes[1].nativeElement.checked).toBeFalse();
+    expect(
+      checkboxes[1].nativeElement.attributes.getNamedItem('ng-reflect-checked')
+        .value
+    ).toEqual('false');
   }));
 
   describe('toggling', () => {
@@ -185,9 +244,9 @@ describe('scalar column editor', () => {
     it('dispatches dataTableColumnToggled action with singe selection when checkbox is clicked', fakeAsync(() => {
       store.overrideSelector(getSingleSelectionHeaders, [
         {
-          type: ColumnHeaderType.RUN,
-          name: 'run',
-          displayName: 'Run',
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
           enabled: true,
         },
         {
@@ -209,7 +268,12 @@ describe('scalar column editor', () => {
       expect(dispatchedActions[0]).toEqual(
         dataTableColumnToggled({
           dataTableMode: DataTableMode.SINGLE,
-          headerType: ColumnHeaderType.RUN,
+          header: {
+            type: ColumnHeaderType.SMOOTHED,
+            name: 'smoothed',
+            displayName: 'Smoothed',
+            enabled: true,
+          },
         })
       );
     }));
@@ -241,7 +305,12 @@ describe('scalar column editor', () => {
       expect(dispatchedActions[0]).toEqual(
         dataTableColumnToggled({
           dataTableMode: DataTableMode.RANGE,
-          headerType: ColumnHeaderType.MAX_VALUE,
+          header: {
+            type: ColumnHeaderType.MAX_VALUE,
+            name: 'maxValue',
+            displayName: 'Max',
+            enabled: false,
+          },
         })
       );
     }));
@@ -256,12 +325,12 @@ describe('scalar column editor', () => {
       });
     });
 
-    it('dispatches dataTableColumnEdited action with singe selection when header is dragged', fakeAsync(() => {
+    it('dispatches dataTableColumnOrderChanged action with single selection when header is dragged', fakeAsync(() => {
       store.overrideSelector(getSingleSelectionHeaders, [
         {
-          type: ColumnHeaderType.RUN,
-          name: 'run',
-          displayName: 'Run',
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
           enabled: true,
         },
         {
@@ -290,38 +359,31 @@ describe('scalar column editor', () => {
       headerListItems[0].triggerEventHandler('dragend');
 
       expect(dispatchedActions[0]).toEqual(
-        dataTableColumnEdited({
+        dataTableColumnOrderChanged({
+          source: {
+            type: ColumnHeaderType.SMOOTHED,
+            name: 'smoothed',
+            displayName: 'Smoothed',
+            enabled: true,
+          },
+          destination: {
+            type: ColumnHeaderType.VALUE,
+            name: 'value',
+            displayName: 'Value',
+            enabled: true,
+          },
+          side: Side.RIGHT,
           dataTableMode: DataTableMode.SINGLE,
-          headers: [
-            {
-              type: ColumnHeaderType.VALUE,
-              name: 'value',
-              displayName: 'Value',
-              enabled: true,
-            },
-            {
-              type: ColumnHeaderType.RUN,
-              name: 'run',
-              displayName: 'Run',
-              enabled: true,
-            },
-            {
-              type: ColumnHeaderType.STEP,
-              name: 'step',
-              displayName: 'Step',
-              enabled: true,
-            },
-          ],
         })
       );
     }));
 
-    it('dispatches dataTableColumnEdited action with range selection when header is dragged', fakeAsync(() => {
+    it('dispatches dataTableColumnOrderChanged action with range selection when header is dragged', fakeAsync(() => {
       store.overrideSelector(getRangeSelectionHeaders, [
         {
-          type: ColumnHeaderType.RUN,
-          name: 'run',
-          displayName: 'Run',
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
           enabled: true,
         },
         {
@@ -350,28 +412,21 @@ describe('scalar column editor', () => {
       headerListItems[1].triggerEventHandler('dragend');
 
       expect(dispatchedActions[0]).toEqual(
-        dataTableColumnEdited({
+        dataTableColumnOrderChanged({
+          source: {
+            type: ColumnHeaderType.MAX_VALUE,
+            name: 'maxValue',
+            displayName: 'Max',
+            enabled: true,
+          },
+          destination: {
+            type: ColumnHeaderType.SMOOTHED,
+            name: 'smoothed',
+            displayName: 'Smoothed',
+            enabled: true,
+          },
+          side: Side.LEFT,
           dataTableMode: DataTableMode.RANGE,
-          headers: [
-            {
-              type: ColumnHeaderType.MAX_VALUE,
-              name: 'maxValue',
-              displayName: 'Max',
-              enabled: true,
-            },
-            {
-              type: ColumnHeaderType.RUN,
-              name: 'run',
-              displayName: 'Run',
-              enabled: true,
-            },
-            {
-              type: ColumnHeaderType.MIN_VALUE,
-              name: 'minValue',
-              displayName: 'Min',
-              enabled: true,
-            },
-          ],
         })
       );
     }));
@@ -379,9 +434,9 @@ describe('scalar column editor', () => {
     it('highlights item with bottom edge when dragging below item being dragged', fakeAsync(() => {
       store.overrideSelector(getRangeSelectionHeaders, [
         {
-          type: ColumnHeaderType.RUN,
-          name: 'run',
-          displayName: 'Run',
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
           enabled: true,
         },
         {
@@ -415,9 +470,9 @@ describe('scalar column editor', () => {
     it('highlights item with top edge when dragging above item being dragged', fakeAsync(() => {
       store.overrideSelector(getRangeSelectionHeaders, [
         {
-          type: ColumnHeaderType.RUN,
-          name: 'run',
-          displayName: 'Run',
+          type: ColumnHeaderType.SMOOTHED,
+          name: 'smoothed',
+          displayName: 'Smoothed',
           enabled: true,
         },
         {
@@ -497,13 +552,13 @@ describe('scalar column editor', () => {
     it('update when global tableEditorSelectedTab changes', () => {
       const fixture = createComponent();
       fixture.detectChanges();
-      const tabs = fixture.debugElement.queryAll(By.css('.mat-tab-label'));
+      const tabs = fixture.debugElement.queryAll(By.css('.mat-mdc-tab'));
 
       expect(
-        tabs[0].attributes['class']?.includes('mat-tab-label-active')
+        tabs[0].attributes['class']?.includes('mdc-tab--active')
       ).toBeTrue();
       expect(
-        tabs[1].attributes['class']?.includes('mat-tab-label-active')
+        tabs[1].attributes['class']?.includes('mdc-tab--active')
       ).toBeFalse();
 
       store.overrideSelector(getTableEditorSelectedTab, DataTableMode.RANGE);
@@ -511,10 +566,10 @@ describe('scalar column editor', () => {
       fixture.detectChanges();
 
       expect(
-        tabs[0].attributes['class']?.includes('mat-tab-label-active')
+        tabs[0].attributes['class']?.includes('mdc-tab--active')
       ).toBeFalse();
       expect(
-        tabs[1].attributes['class']?.includes('mat-tab-label-active')
+        tabs[1].attributes['class']?.includes('mdc-tab--active')
       ).toBeTrue();
     });
   });

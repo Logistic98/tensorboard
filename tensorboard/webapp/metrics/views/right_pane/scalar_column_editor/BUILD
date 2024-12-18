@@ -5,7 +5,6 @@ package(default_visibility = ["//tensorboard:internal"])
 tf_sass_binary(
     name = "scalar_column_editor_styles",
     src = "scalar_column_editor_component.scss",
-    strict_deps = False,
     deps = [
         "//tensorboard/webapp:angular_material_sass_deps",
         "//tensorboard/webapp/theme",
@@ -27,10 +26,12 @@ tf_ng_module(
         "//tensorboard/webapp:app_state",
         "//tensorboard/webapp:selectors",
         "//tensorboard/webapp/angular:expect_angular_material_checkbox",
+        "//tensorboard/webapp/angular:expect_angular_material_icon",
         "//tensorboard/webapp/angular:expect_angular_material_tabs",
         "//tensorboard/webapp/metrics:types",
         "//tensorboard/webapp/metrics/actions",
         "//tensorboard/webapp/metrics/store",
+        "//tensorboard/webapp/metrics/views/main_view:common_selectors",
         "//tensorboard/webapp/widgets/data_table:data_table_header",
         "//tensorboard/webapp/widgets/data_table:types",
         "@npm//@angular/common",
@@ -50,6 +51,7 @@ tf_ts_library(
         ":scalar_column_editor",
         "//tensorboard/webapp:app_state",
         "//tensorboard/webapp/angular:expect_angular_core_testing",
+        "//tensorboard/webapp/angular:expect_angular_material_checkbox",
         "//tensorboard/webapp/angular:expect_angular_material_tabs",
         "//tensorboard/webapp/angular:expect_angular_platform_browser_animations",
         "//tensorboard/webapp/angular:expect_ngrx_store_testing",

@@ -14,6 +14,7 @@ tf_ng_module(
     deps = [
         ":backend_types",
         "//tensorboard/webapp/webapp_data_source:http_client",
+        "//tensorboard/webapp/widgets/data_table:types",
         "@npm//@angular/core",
         "@npm//rxjs",
     ],
@@ -24,7 +25,10 @@ tf_ts_library(
     srcs = [
         "runs_backend_types.ts",
     ],
-    visibility = ["//visibility:private"],
+    visibility = [
+        "//tensorboard/webapp/hparams:__pkg__",
+        "//tensorboard/webapp/runs/data_source:__subpackages__",
+    ],
 )
 
 tf_ng_module(

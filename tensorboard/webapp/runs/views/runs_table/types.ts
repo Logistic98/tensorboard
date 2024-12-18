@@ -26,7 +26,6 @@ export {
   DomainType,
   HparamSpec,
   HparamValue,
-  MetricSpec,
 } from '../../data_source/runs_data_source_types';
 
 export enum RunsTableColumn {
@@ -41,6 +40,7 @@ export interface RunTableItem {
   experimentAlias: ExperimentAlias;
   experimentName: string;
   selected: boolean;
+  runColor: string;
   hparams: Map<string, HparamValue['value']>;
   metrics: Map<string, MetricValue['value']>;
 }
