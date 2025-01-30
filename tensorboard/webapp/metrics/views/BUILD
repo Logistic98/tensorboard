@@ -12,7 +12,6 @@ tf_sass_library(
 tf_sass_binary(
     name = "metrics_container_styles",
     src = "metrics_container.scss",
-    strict_deps = False,
     deps = [
         "//tensorboard/webapp:angular_material_sass_deps",
         "//tensorboard/webapp/theme",
@@ -33,6 +32,7 @@ tf_ng_module(
         "//tensorboard/webapp:selectors",
         "//tensorboard/webapp/angular:expect_angular_material_icon",
         "//tensorboard/webapp/core",
+        "//tensorboard/webapp/core/store",
         "//tensorboard/webapp/customization",
         "//tensorboard/webapp/feature_flag/store",
         "//tensorboard/webapp/feature_flag/store:types",
@@ -80,9 +80,11 @@ tf_ts_library(
         "//tensorboard/webapp/angular:expect_angular_core_testing",
         "//tensorboard/webapp/angular:expect_angular_platform_browser_animations",
         "//tensorboard/webapp/angular:expect_ngrx_store_testing",
+        "//tensorboard/webapp/core/store",
         "//tensorboard/webapp/feature_flag/store",
         "//tensorboard/webapp/metrics/actions",
         "//tensorboard/webapp/metrics/data_source",
+        "//tensorboard/webapp/metrics/views/main_view",
         "//tensorboard/webapp/runs/views/runs_selector",
         "//tensorboard/webapp/testing:utils",
         "@npm//@angular/core",

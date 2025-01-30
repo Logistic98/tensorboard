@@ -46,6 +46,8 @@ export declare interface BackendSettings {
   linkedTimeEnabled?: boolean;
   singleSelectionHeaders?: ColumnHeader[];
   rangeSelectionHeaders?: ColumnHeader[];
+  dashboardDisplayedHparamColumns?: ColumnHeader[];
+  savingPinsEnabled?: boolean;
 }
 
 /**
@@ -70,4 +72,6 @@ export interface PersistableSettings {
   linkedTimeEnabled?: boolean;
   singleSelectionHeaders?: ColumnHeader[];
   rangeSelectionHeaders?: ColumnHeader[];
+  dashboardDisplayedHparamColumns?: ColumnHeader[];
+  savingPinsEnabled?: boolean;
 }

@@ -21,16 +21,16 @@ limitations under the License.
     (selectedTabChange)="tabChange($event)"
   >
     <mat-tab [label]="'Single'">
-      <ngContext
+      <ng-container
         [ngTemplateOutlet]="headerList"
         [ngTemplateOutletContext]="{headers: singleHeaders, dataTableMode:DataTableMode.SINGLE}"
-      ></ngContext>
+      ></ng-container>
     </mat-tab>
     <mat-tab [label]="'Range'">
-      <ngContext
+      <ng-container
         [ngTemplateOutlet]="headerList"
         [ngTemplateOutletContext]="{headers: rangeHeaders, dataTableMode:DataTableMode.RANGE}"
-      ></ngContext>
+      ></ng-container>
     </mat-tab>
   </mat-tab-group>
 </div>
@@ -51,21 +51,19 @@ limitations under the License.
   let-headers="headers"
   let-dataTableMode="dataTableMode"
 >
-  <div class="header-list">
-    <div
-      class="header-list-item"
-      *ngFor="let header of headers;"
-      draggable="true"
-      (dragstart)="dragStart(header)"
-      (dragend)="dragEnd(dataTableMode)"
-      (dragenter)="dragEnter(header, dataTableMode)"
-      [ngClass]="getHighlightClasses(header)"
-    >
-      <mat-checkbox
-        [checked]="header.enabled"
-        (change)="toggleHeader(header, dataTableMode)"
-        ><tb-data-table-header [header]="header"></tb-data-table-header
-      ></mat-checkbox>
-    </div>
+  <div
+    class="header-list-item"
+    *ngFor="let header of headers;"
+    draggable="true"
+    (dragstart)="dragStart(header)"
+    (dragend)="dragEnd(dataTableMode)"
+    (dragenter)="dragEnter(header, dataTableMode)"
+    [ngClass]="getHighlightClasses(header)"
+  >
+    <mat-checkbox
+      [checked]="header.enabled"
+      (change)="toggleHeader(header, dataTableMode)"
+      ><tb-data-table-header [header]="header"></tb-data-table-header
+    ></mat-checkbox>
   </div>
 </ng-template>

@@ -18,26 +18,32 @@ limitations under the License.
 <tb-data-table
   [headers]="columnHeaders"
   [sortingInfo]="sortingInfo"
-  [columnCustomizationEnabled]="columnCustomizationEnabled"
+  [columnFilters]="columnFilters"
+  [selectableColumns]="selectableColumns"
+  [numColumnsLoaded]="numColumnsLoaded"
+  [hasMoreColumnsToLoad]="numColumnsLoaded === numColumnsToLoad"
+  [addColumnSize]="AddColumnSize.SMALL"
   (sortDataBy)="sortDataBy.emit($event)"
-  (orderColumns)="orderColumns($event)"
-  (removeColumn)="removeColumn.emit($event)"
+  (orderColumns)="onOrderColumns($event)"
+  (addColumn)="addColumn.emit($event)"
+  (removeColumn)="onRemoveColumn($event)"
+  (addFilter)="addFilter.emit($event)"
+  (loadAllColumns)="loadAllColumns.emit()"
 >
   <ng-container header>
-    <ng-container *ngFor="let header of getHeaders()">
+    <ng-container *ngFor="let header of extendHeaders(columnHeaders)">
       <tb-data-table-header-cell
         *ngIf="header.enabled && (header.type !== ColumnHeaderType.SMOOTHED || smoothingEnabled)"
         [header]="header"
         [sortingInfo]="sortingInfo"
-        [hparamsEnabled]="hparamsEnabled"
-        [controlsEnabled]="header.type !== ColumnHeaderType.COLOR"
+        [disableContextMenu]="!columnContextMenusEnabled"
       ></tb-data-table-header-cell> </ng-container
   ></ng-container>
 
   <ng-container content>
     <ng-container *ngFor="let dataRow of getTimeSelectionTableData()">
       <tb-data-table-content-row>
-        <ng-container *ngFor="let header of getHeaders()">
+        <ng-container *ngFor="let header of extendHeaders(columnHeaders)">
           <tb-data-table-content-cell
             *ngIf="header.enabled && (header.type !== ColumnHeaderType.SMOOTHED || smoothingEnabled)"
             [header]="header"

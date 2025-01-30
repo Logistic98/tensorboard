@@ -15,7 +15,7 @@
 """Experimental framework for generic TensorBoard data providers."""
 
 
-from typing import Collection, Tuple, Union
+from typing import Collection, Sequence, Tuple, Union
 import abc
 import dataclasses
 import enum
@@ -104,11 +104,21 @@ class DataProvider(metaclass=abc.ABCMeta):
     which describes the set of known values for that hyperparameter across the
     given set of experiments.
 
-    Each run within an experiment may specify a value for a hyperparameter. Runs
-    that were generated together with the same set of hyperparameter values form
-    a hyperparameter session. When querying for hyperparameter values for a set
-    of experiments, the result will group runs by hyperparameter session and
-    provide one set of hyperparameter values for each group.
+    There is a corresponding *hyperparameter value* class, which describes an
+    actual value of a hyperparameter that was logged during experiment
+    execution.
+
+    Each run within an experiment may specify its own value for a
+    hyperparameter. Runs that were logically executed together with the same set
+    of hyperparameter values form a hyperparameter `session`. Sessions that
+    include the same hyperparameter values can be grouped together in a
+    hyperparameter `session group`. Often a session group will contain only a
+    single session. However, in some scenarios, the same hyperparameters will be
+    used to execute multiple jobs with the idea to aggregate the metrics across
+    those jobs and analyze non-deterministic factors. In that case, a session
+    group will contain multiple sessions. The result will group runs by
+    hyperparameter session group and provide one set of hyperparameter values
+    for each group.
 
     All methods on this class take a `RequestContext` parameter as the
     first positional argument. This argument is temporarily optional to
@@ -217,7 +227,8 @@ class DataProvider(metaclass=abc.ABCMeta):
           plugin_name: String name of the TensorBoard plugin that created
             the data to be queried. Required.
           downsample: Integer number of steps to which to downsample the
-            results (e.g., `1000`). See `DataProvider` class docstring
+            results (e.g., `1000`). The most recent datum (last scalar)
+            should always be included. See `DataProvider` class docstring
             for details about this parameter. Required.
           run_tag_filter: Optional `RunTagFilter` value. If provided, a time
             series will only be included in the result if its run and tag
@@ -231,6 +242,49 @@ class DataProvider(metaclass=abc.ABCMeta):
         Returns:
           A nested map `d` such that `d[run][tag]` is a list of
           `ScalarDatum` values sorted by step.
+
+        Raises:
+          tensorboard.errors.PublicError: See `DataProvider` class docstring.
+        """
+        pass
+
+    @abc.abstractmethod
+    def read_last_scalars(
+        self,
+        ctx=None,
+        *,
+        experiment_id,
+        plugin_name,
+        run_tag_filter=None,
+    ):
+        """Read the most recent values from scalar time series.
+
+        The most recent scalar value for each tag under each run is retrieved
+        from the latest event (at the latest timestamp). Note that this is
+        different from the sorting used in `read_scalars`, which is by step.
+        This was an accidental misalignment that would need considerable effort
+        to change across our implementations, so we're leaving it as is for now.
+        In most cases this should not matter, but if the same log dir is used
+        for multiple runs, this might not match the last data point returned by
+        the `read_scalars`.
+
+        Args:
+          ctx: A TensorBoard `RequestContext` value.
+          experiment_id: ID of enclosing experiment.
+          plugin_name: String name of the TensorBoard plugin that created
+            the data to be queried. Required.
+          run_tag_filter: Optional `RunTagFilter` value. If provided, a datum
+            series will only be included in the result if its run and tag
+            both pass this filter. If `None`, all time series will be
+            included.
+
+        The result will only contain keys for run-tag combinations that
+        actually exist, which may not include all entries in the
+        `run_tag_filter`.
+
+        Returns:
+          A nested map `d` such that `d[run][tag]` is a `ScalarDatum`
+          representing the latest scalar in the time series.
 
         Raises:
           tensorboard.errors.PublicError: See `DataProvider` class docstring.
@@ -374,22 +428,57 @@ class DataProvider(metaclass=abc.ABCMeta):
         """
         pass
 
-    def list_hyperparameters(self, ctx=None, *, experiment_ids):
+    def list_hyperparameters(self, ctx=None, *, experiment_ids, limit=None):
         """List hyperparameters metadata.
 
         Args:
           ctx: A TensorBoard `RequestContext` value.
           experiment_ids: A Collection[string] of IDs of the enclosing
             experiments.
+          limit: Optional number of hyperparameter metadata to include in the
+            result. If unset or zero, all metadata will be included.
 
         Returns:
-          A Collection[Hyperparameter] describing the hyperparameter metadata
-          for the experiments.
+          A ListHyperparametersResult describing the hyperparameter-related
+          metadata for the experiments.
 
         Raises:
           tensorboard.errors.PublicError: See `DataProvider` class docstring.
         """
-        pass
+        return ListHyperparametersResult(hyperparameters=[], session_groups=[])
+
+    def read_hyperparameters(
+        self,
+        ctx=None,
+        *,
+        experiment_ids,
+        filters=None,
+        sort=None,
+        hparams_to_include=None,
+    ):
+        """Read hyperparameter values.
+
+        Args:
+          ctx: A TensorBoard `RequestContext` value.
+          experiment_ids: A Collection[string] of IDs of the enclosing
+            experiments.
+          filters: A Collection[HyperparameterFilter] that constrain the
+            returned session groups based on hyperparameter value.
+          sort: A Sequence[HyperparameterSort] that specify how the results
+            should be sorted.
+          hparams_to_include: An optional Collection[str] of the full names of
+            hyperparameters to include in the results. This collection will be
+            augmented to include all the hyperparameters specified in `filters`
+            and `sort`. If None, all hyperparameters will be returned.
+
+        Returns:
+          A Sequence[HyperparameterSessionGroup] describing the groups and
+          their hyperparameter values.
+
+        Raises:
+          tensorboard.errors.PublicError: See `DataProvider` class docstring.
+        """
+        return []
 
 
 class ExperimentMetadata:
@@ -537,13 +626,14 @@ class Hyperparameter:
     """Metadata about a hyperparameter.
 
     Attributes:
-      hyperparameter_name: A string identifier for the hyperparameter that should be unique
-        in any result set of Hyperparameter objects.
+      hyperparameter_name: A string identifier for the hyperparameter that
+        should be unique in any result set of Hyperparameter objects.
       hyperparameter_display_name: A displayable name for the hyperparameter.
         Unlike hyperparameter_name, there is no uniqueness constraint.
       domain_type: A HyperparameterDomainType describing how we represent the
         set of known values in the `domain` attribute.
-      domain: A representation of the set of known values for the hyperparameter.
+      domain: A representation of the set of known values for the
+        hyperparameter.
 
         If domain_type is INTERVAL, a Tuple[float, float] describing the
           range of numeric values.
@@ -553,10 +643,15 @@ class Hyperparameter:
           finite set of string values.
         If domain_type is DISCRETE_BOOL, a Collection[bool] describing the
           finite set of bool values.
+
+      differs: Describes whether there are two or more known values for the
+        hyperparameter for the set of experiments specified in the
+        list_hyperparameters() request. Hyperparameters for which this is
+        true are made more prominent or easier to discover in the UI.
     """
 
-    hyperparameter_name: str = ""
-    hyperparameter_display_name: str = ""
+    hyperparameter_name: str
+    hyperparameter_display_name: str
     domain_type: Union[HyperparameterDomainType, None] = None
     domain: Union[
         Tuple[float, float],
@@ -565,6 +660,159 @@ class Hyperparameter:
         Collection[bool],
         None,
     ] = None
+    differs: bool = False
+
+
+@dataclasses.dataclass(frozen=True)
+class HyperparameterValue:
+    """A hyperparameter value.
+
+    Attributes:
+      hyperparameter_name: A string identifier for the hyperparameters. It
+        corresponds to the hyperparameter_name field in the Hyperparameter
+        class.
+      domain_type: A HyperparameterDomainType describing how we represent the
+        set of known values in the `domain` attribute.
+      value: The value of the hyperparameter.
+
+        If domain_type is INTERVAL or DISCRETE_FLOAT, value is a float.
+        If domain_type is DISCRETE_STRING, value is a str.
+        If domain_type is DISCRETE_BOOL, value is a bool.
+        If domain_type is unknown (None), value is None.
+    """
+
+    hyperparameter_name: str
+    domain_type: Union[HyperparameterDomainType, None] = None
+    value: Union[float, str, bool, None] = None
+
+
+@dataclasses.dataclass(frozen=True)
+class HyperparameterSessionRun:
+    """A single run in a HyperparameterSessionGroup.
+
+    Attributes:
+      experiment_id: The id of the experiment to which the run belongs.
+      run: The name of the run.
+    """
+
+    experiment_id: str
+    run: str
+
+
+@dataclasses.dataclass(frozen=True)
+class HyperparameterSessionGroup:
+    """A group of sessions logically executed together with the same hparam values.
+
+    A `session` generally represents a particular execution of a job with a given
+    set of hyperparameter values. A session may contain multiple related runs
+    executed together to train and/or validate a model.
+
+    Often a `session group` will contain only a single session. However, in some
+    scenarios, the same hyperparameters will be used to execute multiple jobs
+    with the idea to aggregate the metrics across those jobs and analyze
+    non-deterministic factors. In that case, a session group will contain multiple
+    sessions.
+
+    Attributes:
+      root: A descriptor of the common ancestor of all sessions in this
+        group.
+
+        In the case where the group contains all runs in the experiment, this
+        would just be a HyperparameterSessionRun with the experiment_id property
+        set to the experiment's id but run property set to empty.
+
+        In the case where the group contains a subset of runs in the experiment,
+        this would be a HyperparameterSessionRun with the experiment_id property
+        set and the run property set to the largest common prefix for runs.
+
+        The root might correspond to a session within the group but it is not
+        necessary.
+      sessions: A sequence of all sessions in this group.
+      hyperparameter_values: A collection of all hyperparameter values in this
+        group.
+    """
+
+    root: HyperparameterSessionRun
+    sessions: Sequence[HyperparameterSessionRun]
+    hyperparameter_values: Collection[HyperparameterValue]
+
+
+class HyperparameterFilterType(enum.Enum):
+    """Describes how to represent filter values."""
+
+    # A regular expression string. Normally represented as str.
+    REGEX = "regex"
+    # A range of numeric values. Normally represented as Tuple[float, float].
+    INTERVAL = "interval"
+    # A finite set of values. Normally represented as Collection[float|str|bool].
+    DISCRETE = "discrete"
+
+
+@dataclasses.dataclass(frozen=True)
+class HyperparameterFilter:
+    """A constraint based on hyperparameter value.
+
+    Attributes:
+      hyperparameter_name: A string identifier for the hyperparameter to use for
+        the filter. It corresponds to the hyperparameter_name field in the
+        Hyperparameter class.
+      filter_type: A HyperparameterFilterType describing how we represent the
+        filter values in the 'filter' attribute.
+      filter: A representation of the set of the filter values.
+
+        If filter_type is REGEX, a str containing the regular expression.
+        If filter_type is INTERVAL, a Tuple[float, float] describing the min and
+          max values of the filter interval.
+        If filter_type is DISCRETE a Collection[float|str|bool] describing the
+          finite set of filter values.
+    """
+
+    hyperparameter_name: str
+    filter_type: HyperparameterFilterType
+    filter: Union[
+        str,
+        Tuple[float, float],
+        Collection[Union[float, str, bool]],
+    ]
+
+
+class HyperparameterSortDirection(enum.Enum):
+    """Describes which direction to sort a value."""
+
+    # Sort values ascending.
+    ASCENDING = "ascending"
+    # Sort values descending.
+    DESCENDING = "descending"
+
+
+@dataclasses.dataclass(frozen=True)
+class HyperparameterSort:
+    """A sort criterium based on hyperparameter value.
+
+    Attributes:
+      hyperparameter_name: A string identifier for the hyperparameter to use for
+        the sort. It corresponds to the hyperparameter_name field in the
+        Hyperparameter class.
+      sort_direction: The direction to sort.
+    """
+
+    hyperparameter_name: str
+    sort_direction: HyperparameterSortDirection
+
+
+@dataclasses.dataclass(frozen=True)
+class ListHyperparametersResult:
+    """The result from calling list_hyperparameters().
+
+    Attributes:
+      hyperparameters: The hyperparameteres belonging to the experiments in the
+        request.
+      session_groups: The session groups present in the experiments in the
+        request.
+    """
+
+    hyperparameters: Collection[Hyperparameter]
+    session_groups: Collection[HyperparameterSessionGroup]
 
 
 class _TimeSeries:
@@ -580,6 +828,7 @@ class _TimeSeries:
         "_plugin_content",
         "_description",
         "_display_name",
+        "_last_value",
     )
 
     def __init__(
@@ -590,12 +839,14 @@ class _TimeSeries:
         plugin_content,
         description,
         display_name,
+        last_value=None,
     ):
         self._max_step = max_step
         self._max_wall_time = max_wall_time
         self._plugin_content = plugin_content
         self._description = description
         self._display_name = display_name
+        self._last_value = last_value
 
     @property
     def max_step(self):
@@ -617,6 +868,10 @@ class _TimeSeries:
     def display_name(self):
         return self._display_name
 
+    @property
+    def last_value(self):
+        return self._last_value
+
 
 class ScalarTimeSeries(_TimeSeries):
     """Metadata about a scalar time series for a particular run and tag.
@@ -633,6 +888,9 @@ class ScalarTimeSeries(_TimeSeries):
         empty if no description was specified.
       display_name: An optional long-form Markdown description, as a `str` that is
         empty if no description was specified. Deprecated; may be removed soon.
+      last_value: An optional value for the latest scalar in the time series,
+        corresponding to the scalar at `max_step`. Note that this field might NOT
+        be populated by all data provider implementations.
     """
 
     def __eq__(self, other):
@@ -648,6 +906,8 @@ class ScalarTimeSeries(_TimeSeries):
             return False
         if self._display_name != other._display_name:
             return False
+        if self._last_value != other._last_value:
+            return False
         return True
 
     def __hash__(self):
@@ -658,6 +918,7 @@ class ScalarTimeSeries(_TimeSeries):
                 self._plugin_content,
                 self._description,
                 self._display_name,
+                self._last_value,
             )
         )
 
@@ -669,6 +930,7 @@ class ScalarTimeSeries(_TimeSeries):
                 "plugin_content=%r" % (self._plugin_content,),
                 "description=%r" % (self._description,),
                 "display_name=%r" % (self._display_name,),
+                "last_value=%r" % (self._last_value,),
             )
         )
 

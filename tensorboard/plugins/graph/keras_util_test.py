@@ -23,6 +23,12 @@ from tensorboard.plugins.graph import keras_util
 
 
 class KerasUtilTest(tf.test.TestCase):
+
+    def setUp(self):
+        super(KerasUtilTest, self).setUp()
+        # Resets all generated states before each test.
+        tf.keras.backend.clear_session()
+
     def assertGraphDefToModel(self, expected_proto, model):
         model_config = json.loads(model.to_json())
 
@@ -604,9 +610,9 @@ class KerasUtilTest(tf.test.TestCase):
         main_input = tf.keras.layers.Input(
             shape=(100,), dtype="int32", name="main_input"
         )
-        x = tf.keras.layers.Embedding(
-            output_dim=512, input_dim=10000, input_length=100
-        )(main_input)
+        x = tf.keras.layers.Embedding(output_dim=512, input_dim=10000)(
+            main_input
+        )
         rnn_out = tf.keras.layers.SimpleRNN(32)(x)
 
         auxiliary_output = tf.keras.layers.Dense(
@@ -662,7 +668,7 @@ class KerasUtilTest(tf.test.TestCase):
               }
             }
             node {
-            name: "model_1/model/sub_func_input_1"
+              name: "model_1/model/sub_func_input_1"
               attr {
                 key: "dtype"
                 value {
@@ -976,12 +982,13 @@ class KerasUtilTest(tf.test.TestCase):
 
         self.assertGraphDefToModel(expected_proto, model)
 
-    def test_keras_model_to_graph_def_functional_multiple_inbound_nodes_from_same_node(
+    # Enable after next sync to internal repo from Keras team.
+    def DISABLED_test_keras_model_to_graph_def_functional_multiple_inbound_nodes_from_same_node(
         self,
     ):
         expected_proto = """
             node {
-              name: "model/input_1"
+              name: "functional/input_layer"
               attr {
                 key: "keras_class"
                 value {
@@ -996,8 +1003,8 @@ class KerasUtilTest(tf.test.TestCase):
               }
             }
             node {
-              name: "model/private__doubling_layer"
-              input: "model/input_1"
+              name: "functional/__doubling_layer"
+              input: "functional/input_layer"
               attr {
                 key: "keras_class"
                 value {
@@ -1012,9 +1019,9 @@ class KerasUtilTest(tf.test.TestCase):
               }
             }
             node {
-              name: "model/add"
-              input: "model/private__doubling_layer"
-              input: "model/private__doubling_layer"
+              name: "functional/add"
+              input: "functional/__doubling_layer"
+              input: "functional/__doubling_layer"
               attr {
                 key: "keras_class"
                 value {
@@ -1036,6 +1043,20 @@ class KerasUtilTest(tf.test.TestCase):
         model = tf.keras.Model(inputs=[inputs], outputs=outputs)
 
         self.assertGraphDefToModel(expected_proto, model)
+
+    def test__keras_model_to_graph_def__does_not_crash_with_mixed_precision_dtype_policy(
+        self,
+    ):
+        # See https://keras.io/api/mixed_precision/ for more info.
+        # Test to avoid regression on issue #5548
+        first_layer = tf.keras.layers.Dense(
+            1, input_shape=(1,), dtype="mixed_float16"
+        )
+        model = tf.keras.Sequential([first_layer])
+
+        model_config = json.loads(model.to_json())
+        # This line should not raise errors:
+        keras_util.keras_model_to_graph_def(model_config)
 
 
 class _DoublingLayer(tf.keras.layers.Layer):

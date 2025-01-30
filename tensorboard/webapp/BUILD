@@ -55,6 +55,7 @@ tf_ng_module(
         "//tensorboard/webapp/feature_flag/store",
         "//tensorboard/webapp/metrics/store",
         "//tensorboard/webapp/notification_center/_redux",
+        "//tensorboard/webapp/persistent_settings/_redux",
         "//tensorboard/webapp/runs/store:selectors",
         "//tensorboard/webapp/util:ui_selectors",
     ],
@@ -75,9 +76,12 @@ tf_ng_module(
 tf_ts_library(
     name = "tb_polymer_interop_types",
     srcs = [
+        "tb_polymer_interop_type_definitions.d.ts",
         "tb_polymer_interop_types.ts",
     ],
     deps = [
+        # This build target is shared with the polymer binary, do not
+        # add any more dependencies.
         "//tensorboard/webapp/feature_flag:types",
     ],
 )
@@ -85,7 +89,6 @@ tf_ts_library(
 tf_sass_binary(
     name = "app_styles",
     src = "app_container.scss",
-    strict_deps = False,
     deps = ["//tensorboard/webapp/theme"],
 )
 
@@ -107,6 +110,7 @@ tf_ng_module(
         ":oss_plugins_module",
         ":selectors",
         ":store_module",
+        ":tb_polymer_interop_types",
         "//tensorboard/components/experimental/plugin_util:plugin_host",
         "//tensorboard/webapp/alert",
         "//tensorboard/webapp/alert/views:alert_snackbar",
@@ -142,6 +146,7 @@ tf_ng_module(
         "app_state.ts",
     ],
     deps = [
+        "//tensorboard/webapp/alert/store:types",
         "//tensorboard/webapp/app_routing/store:types",
         "//tensorboard/webapp/core/store",
         "//tensorboard/webapp/experiments/store:types",
@@ -149,6 +154,7 @@ tf_ng_module(
         "//tensorboard/webapp/hparams:types",
         "//tensorboard/webapp/metrics/store:types",
         "//tensorboard/webapp/notification_center/_redux:types",
+        "//tensorboard/webapp/persistent_settings/_redux:types",
         "//tensorboard/webapp/runs/store:types",
         "//tensorboard/webapp/settings",
     ],
@@ -270,12 +276,14 @@ tf_ng_web_test_suite(
         "//tensorboard/webapp/metrics:test_lib",
         "//tensorboard/webapp/metrics:utils_test",
         "//tensorboard/webapp/metrics/data_source:metrics_data_source_test",
+        "//tensorboard/webapp/metrics/data_source:saved_pins_data_source_test",
         "//tensorboard/webapp/metrics/effects:effects_test",
         "//tensorboard/webapp/metrics/store:store_test",
         "//tensorboard/webapp/metrics/views:views_test",
         "//tensorboard/webapp/metrics/views/card_renderer:card_renderer_tests",
         "//tensorboard/webapp/metrics/views/main_view:main_view_tests",
         "//tensorboard/webapp/metrics/views/right_pane:right_pane_test",
+        "//tensorboard/webapp/metrics/views/right_pane/saving_pins_dialog:saving_pins_dialog_test",
         "//tensorboard/webapp/metrics/views/right_pane/scalar_column_editor:scalar_column_editor_test",
         "//tensorboard/webapp/plugins:plugins_container_test_lib",
         "//tensorboard/webapp/reloader:test_lib",
@@ -295,6 +303,7 @@ tf_ng_web_test_suite(
         "//tensorboard/webapp/widgets/content_wrapping_input:content_wrapping_input_tests",
         "//tensorboard/webapp/widgets/custom_modal:custom_modal_test",
         "//tensorboard/webapp/widgets/data_table:data_table_test",
+        "//tensorboard/webapp/widgets/data_table:utils_test",
         "//tensorboard/webapp/widgets/dropdown:dropdown_tests",
         "//tensorboard/webapp/widgets/experiment_alias:experiment_alias_test",
         "//tensorboard/webapp/widgets/filter_input:filter_input_test",
@@ -342,6 +351,7 @@ tf_svg_bundle(
         "@com_google_material_design_icon//:expand_less_24px.svg",
         "@com_google_material_design_icon//:expand_more_24px.svg",
         "@com_google_material_design_icon//:filter_alt_24px.svg",
+        "@com_google_material_design_icon//:filter_list_24px.svg",
         "@com_google_material_design_icon//:flag_24px.svg",
         "@com_google_material_design_icon//:fullscreen_24px.svg",
         "@com_google_material_design_icon//:fullscreen_exit_24px.svg",
@@ -356,6 +366,7 @@ tf_svg_bundle(
         "@com_google_material_design_icon//:line_weight_24px.svg",
         "@com_google_material_design_icon//:more_vert_24px.svg",
         "@com_google_material_design_icon//:notifications_none_24px.svg",
+        "@com_google_material_design_icon//:open_in_new_24px.svg",
         "@com_google_material_design_icon//:palette_24px.svg",
         "@com_google_material_design_icon//:refresh_24px.svg",
         "@com_google_material_design_icon//:search_24px.svg",
@@ -376,6 +387,5 @@ tf_external_sass_libray(
 tf_sass_binary(
     name = "styles",
     src = "styles.scss",
-    strict_deps = False,
     deps = ["//tensorboard/webapp/theme"],
 )

@@ -1,4 +1,5 @@
 load("//tensorboard/defs:defs.bzl", "tf_ng_module", "tf_ng_web_test_suite", "tf_sass_binary", "tf_ts_library")
+load("@rules_python//python:py_binary.bzl", "py_binary")
 
 package(default_visibility = ["//tensorboard:internal"])
 
@@ -7,7 +8,6 @@ licenses(["notice"])
 tf_sass_binary(
     name = "debugger_component_style",
     src = "debugger_component.scss",
-    strict_deps = False,
     deps = ["//tensorboard/webapp/theme"],
 )
 

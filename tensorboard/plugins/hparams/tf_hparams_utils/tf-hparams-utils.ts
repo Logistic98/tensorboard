@@ -75,7 +75,7 @@ export function metricName(metricInfo) {
   if (tag === undefined) {
     tag = '';
   }
-  if (group === '') {
+  if (group === '' || group === '.') {
     return tag;
   }
   return group + '.' + tag;
@@ -302,7 +302,7 @@ export function prettyPrint(value) {
     // TODO(erez):Make the precision user-configurable.
     return value.toPrecision(5);
   }
-  if (value === undefined) {
+  if (value === null || value === undefined) {
     return '';
   }
   return value.toString();

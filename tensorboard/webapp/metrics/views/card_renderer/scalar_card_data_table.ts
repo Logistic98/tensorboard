@@ -21,11 +21,13 @@ import {
 } from '@angular/core';
 import {TimeSelection} from '../../../widgets/card_fob/card_fob_types';
 import {findClosestIndex} from '../../../widgets/line_chart_v2/sub_view/line_chart_interactive_utils';
-import {HeaderEditInfo} from '../../types';
+import {HeaderEditInfo, HeaderToggleInfo} from '../../types';
+import {RunToHparamMap} from '../../../runs/types';
 import {
   ScalarCardDataSeries,
   ScalarCardPoint,
   ScalarCardSeriesMetadataMap,
+  SmoothedSeriesMetadata,
 } from './scalar_card_types';
 import {
   ColumnHeader,
@@ -34,10 +36,18 @@ import {
   TableData,
   SortingInfo,
   SortingOrder,
+  DiscreteFilter,
+  IntervalFilter,
+  FilterAddedEvent,
+  ReorderColumnEvent,
+  AddColumnEvent,
+  AddColumnSize,
 } from '../../../widgets/data_table/types';
 import {isDatumVisible} from './utils';
+import {memoize} from '../../../util/memoize';
 
 @Component({
+  standalone: false,
   selector: 'scalar-card-data-table',
   templateUrl: 'scalar_card_data_table.ng.html',
   styleUrls: ['scalar_card_data_table.css'],
@@ -50,27 +60,43 @@ export class ScalarCardDataTable {
   @Input() columnHeaders!: ColumnHeader[];
   @Input() sortingInfo!: SortingInfo;
   @Input() columnCustomizationEnabled!: boolean;
+  @Input() columnContextMenusEnabled!: boolean;
   @Input() smoothingEnabled!: boolean;
-  @Input() hparamsEnabled?: boolean;
+  @Input() columnFilters!: Map<string, DiscreteFilter | IntervalFilter>;
+  @Input() selectableColumns!: ColumnHeader[];
+  @Input() numColumnsLoaded!: number;
+  @Input() numColumnsToLoad!: number;
+  @Input() runToHparamMap!: RunToHparamMap;
 
   @Output() sortDataBy = new EventEmitter<SortingInfo>();
   @Output() editColumnHeaders = new EventEmitter<HeaderEditInfo>();
-  @Output() removeColumn = new EventEmitter<{
-    headerType: ColumnHeaderType;
-  }>();
+  @Output() addColumn = new EventEmitter<AddColumnEvent>();
+  @Output() removeColumn = new EventEmitter<HeaderToggleInfo>();
+  @Output() addFilter = new EventEmitter<FilterAddedEvent>();
+  @Output() loadAllColumns = new EventEmitter<null>();
 
-  ColumnHeaderType = ColumnHeaderType;
+  readonly ColumnHeaderType = ColumnHeaderType;
+  readonly AddColumnSize = AddColumnSize;
 
-  getHeaders(): ColumnHeader[] {
-    return [
-      {
-        name: 'color',
-        displayName: '',
-        type: ColumnHeaderType.COLOR,
-        enabled: true,
-      },
-    ].concat(this.columnHeaders);
+  // Columns must be memoized to stop needless re-rendering of the content and headers in these
+  // columns. This has been known to cause problems with the controls in these columns,
+  // specifically the add button.
+  extendHeaders = memoize(this.internalExtendHeaders);
+
+  private internalExtendHeaders(headers: ColumnHeader[]) {
+    return ([] as Array<ColumnHeader>).concat(
+      [
+        {
+          name: 'color',
+          displayName: '',
+          type: ColumnHeaderType.COLOR,
+          enabled: true,
+        },
+      ],
+      headers
+    );
   }
+
   getMinPointInRange(
     points: ScalarCardPoint[],
     startPointIndex: number,
@@ -253,6 +279,13 @@ export class ScalarCardDataTable {
               selectedStepData[header.name] =
                 closestEndPoint.value - closestStartPoint.value;
               continue;
+            case ColumnHeaderType.HPARAM:
+              const runId =
+                (metadata as SmoothedSeriesMetadata).originalSeriesId ||
+                metadata.id;
+              selectedStepData[header.name] =
+                this.runToHparamMap?.[runId]?.get(header.name) ?? '';
+              continue;
             default:
               continue;
           }
@@ -292,17 +325,36 @@ export class ScalarCardDataTable {
     return makeValueSortable(point[header.name]);
   }
 
-  orderColumns(headers: ColumnHeader[]) {
+  private getDataTableMode(): DataTableMode {
+    return this.stepOrLinkedTimeSelection.end
+      ? DataTableMode.RANGE
+      : DataTableMode.SINGLE;
+  }
+
+  onOrderColumns({source, destination, side}: ReorderColumnEvent) {
     this.editColumnHeaders.emit({
-      headers: headers,
-      dataTableMode: this.stepOrLinkedTimeSelection.end
-        ? DataTableMode.RANGE
-        : DataTableMode.SINGLE,
+      source,
+      destination,
+      side,
+      dataTableMode: this.getDataTableMode(),
     });
+  }
+
+  onRemoveColumn(header: ColumnHeader) {
+    this.removeColumn.emit({header, dataTableMode: this.getDataTableMode()});
   }
 }
 
-function makeValueSortable(value: number | string | null | undefined) {
+function makeValueSortable(
+  value: number | string | boolean | null | undefined | object
+) {
+  if (typeof value === 'object') {
+    // The Scalar table does not currently support any objects.
+    // When support is added specific sorting logic to that object type should
+    // be added here.
+    return -Infinity;
+  }
+
   if (
     Number.isNaN(value) ||
     value === 'NaN' ||

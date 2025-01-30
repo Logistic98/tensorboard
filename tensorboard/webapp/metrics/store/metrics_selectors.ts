@@ -50,6 +50,8 @@ import {
 import {ColumnHeader, DataTableMode} from '../../widgets/data_table/types';
 import {Extent} from '../../widgets/line_chart_v2/lib/public_types';
 import {memoize} from '../../util/memoize';
+import {getDashboardDisplayedHparamColumns} from '../../hparams/_redux/hparams_selectors';
+import {dataTableUtils} from '../../widgets/data_table/utils';
 
 const selectMetricsState =
   createFeatureSelector<MetricsState>(METRICS_FEATURE_KEY);
@@ -113,20 +115,30 @@ export const getCardLoadState = createSelector(
   }
 );
 
+export const getLoadableTimeSeries = memoize((cardMetadata: CardMetadata) => {
+  return createSelector(
+    (state: MetricsState): MetricsState => state,
+    (state: MetricsState): DeepReadonly<RunToSeries> | null => {
+      const {plugin, tag, sample} = cardMetadata;
+      const loadable = storeUtils.getTimeSeriesLoadable(
+        state.timeSeriesData,
+        plugin,
+        tag,
+        sample
+      );
+      return loadable ? loadable.runToSeries : null;
+    }
+  );
+});
+
 export const getCardTimeSeries = createSelector(
   selectMetricsState,
   (state: MetricsState, cardId: CardId): DeepReadonly<RunToSeries> | null => {
     if (!state.cardMetadataMap.hasOwnProperty(cardId)) {
       return null;
     }
-    const {plugin, tag, sample} = state.cardMetadataMap[cardId];
-    const loadable = storeUtils.getTimeSeriesLoadable(
-      state.timeSeriesData,
-      plugin,
-      tag,
-      sample
-    );
-    return loadable ? loadable.runToSeries : null;
+
+    return getLoadableTimeSeries(state.cardMetadataMap[cardId])(state);
   }
 );
 
@@ -288,6 +300,13 @@ export const getCanCreateNewPins = createSelector(
   }
 );
 
+export const getLastPinnedCardTime = createSelector(
+  selectMetricsState,
+  (state: MetricsState): number => {
+    return state.lastPinnedCardTime;
+  }
+);
+
 const selectSettings = createSelector(
   selectMetricsState,
   (state): MetricsSettings => {
@@ -361,6 +380,11 @@ export const getMetricsImageContrastInMilli = createSelector(
 export const getMetricsImageShowActualSize = createSelector(
   selectSettings,
   (settings): boolean => settings.imageShowActualSize
+);
+
+export const getMetricsSavingPinsEnabled = createSelector(
+  selectSettings,
+  (settings): boolean => settings.savingPinsEnabled
 );
 
 export const getMetricsTagFilter = createSelector(
@@ -476,22 +500,23 @@ export const getTableEditorSelectedTab = createSelector(
   (state): DataTableMode => state.tableEditorSelectedTab
 );
 
-export const getMetricsCardRangeSelectionEnabled = createSelector(
-  getCardStateMap,
-  getMetricsRangeSelectionEnabled,
-  getMetricsLinkedTimeEnabled,
-  (
-    cardStateMap: CardStateMap,
-    globalRangeSelectionEnabled: boolean,
-    linkedTimeEnabled: boolean,
-    cardId: CardId
-  ) =>
-    cardRangeSelectionEnabled(
-      cardStateMap,
-      globalRangeSelectionEnabled,
-      linkedTimeEnabled,
-      cardId
-    )
+export const getMetricsCardRangeSelectionEnabled = memoize((cardId) =>
+  createSelector(
+    getCardStateMap,
+    getMetricsRangeSelectionEnabled,
+    getMetricsLinkedTimeEnabled,
+    (
+      cardStateMap: CardStateMap,
+      globalRangeSelectionEnabled: boolean,
+      linkedTimeEnabled: boolean
+    ) =>
+      cardRangeSelectionEnabled(
+        cardStateMap,
+        globalRangeSelectionEnabled,
+        linkedTimeEnabled,
+        cardId
+      )
+  )
 );
 
 /**
@@ -629,13 +654,26 @@ export const getRangeSelectionHeaders = createSelector(
 
 export const getColumnHeadersForCard = memoize((cardId: string) => {
   return createSelector(
-    (state) => state,
+    getMetricsCardRangeSelectionEnabled(cardId),
     getSingleSelectionHeaders,
     getRangeSelectionHeaders,
-    (state, singleSelectionHeaders, rangeSelectionHeaders) => {
-      return getMetricsCardRangeSelectionEnabled(state, cardId)
+    (
+      cardRangeSelectionEnabled,
+      singleSelectionHeaders,
+      rangeSelectionHeaders
+    ) => {
+      return cardRangeSelectionEnabled
         ? rangeSelectionHeaders
         : singleSelectionHeaders;
     }
   );
 });
+
+export const getGroupedHeadersForCard = memoize((cardId: string) =>
+  createSelector(
+    getColumnHeadersForCard(cardId),
+    getDashboardDisplayedHparamColumns,
+    (standardColumns, hparamColumns) =>
+      dataTableUtils.groupColumns([...standardColumns, ...hparamColumns])
+  )
+);

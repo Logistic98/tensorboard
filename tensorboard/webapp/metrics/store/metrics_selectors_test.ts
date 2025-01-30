@@ -33,6 +33,14 @@ import {
 } from '../../widgets/data_table/types';
 import * as selectors from './metrics_selectors';
 import {CardFeatureOverride, MetricsState} from './metrics_types';
+import {buildMockState} from '../../testing/utils';
+import {
+  buildHparamSpec,
+  buildHparamsState,
+  buildStateFromHparamsState,
+} from '../../hparams/testing';
+import {DeepPartial} from '../../util/types';
+import {HparamsState} from '../../hparams/_redux/types';
 
 describe('metrics selectors', () => {
   beforeEach(() => {
@@ -401,6 +409,54 @@ describe('metrics selectors', () => {
         sampleImageRunToSeries
       );
       expect(selectors.getCardTimeSeries(state, 'card-nonexistent')).toBe(null);
+    });
+  });
+
+  describe('getLoadableTimeSeries', () => {
+    it('getLoadableTimeSeries', () => {
+      const sampleScalarRunToSeries = {
+        run1: createScalarStepData(),
+        run2: createScalarStepData(),
+      };
+      const state = buildMetricsState({
+        timeSeriesData: {
+          ...createTimeSeriesData(),
+          scalars: {
+            tagA: {
+              runToLoadState: {
+                run1: DataLoadState.LOADED,
+                run2: DataLoadState.LOADED,
+              },
+              runToSeries: sampleScalarRunToSeries,
+            },
+          },
+        },
+      });
+
+      expect(
+        selectors.getLoadableTimeSeries({
+          plugin: PluginType.SCALARS,
+          tag: 'tagA',
+          runId: null,
+        })(state)
+      ).toEqual(sampleScalarRunToSeries);
+    });
+
+    it('returns null when plugin data does not contain tag', () => {
+      const state = buildMetricsState({
+        timeSeriesData: {
+          ...createTimeSeriesData(),
+          scalars: {},
+        },
+      });
+
+      expect(
+        selectors.getLoadableTimeSeries({
+          plugin: PluginType.SCALARS,
+          tag: 'tagA',
+          runId: null,
+        })(state)
+      ).toBeNull();
     });
   });
 
@@ -1242,6 +1298,20 @@ describe('metrics selectors', () => {
       );
       expect(selectors.getMetricsCardMinWidth(state)).toBe(400);
     });
+
+    it('returns savingPinsEnabled when called getMetricsSavingPinsEnabled', () => {
+      [{value: true}, {value: false}].forEach(({value}) => {
+        selectors.getMetricsSavingPinsEnabled.release();
+        const state = appStateFromMetricsState(
+          buildMetricsState({
+            settings: buildMetricsSettingsState({
+              savingPinsEnabled: value,
+            }),
+          })
+        );
+        expect(selectors.getMetricsSavingPinsEnabled(state)).toBe(value);
+      });
+    });
   });
 
   describe('getMetricsTagFilter', () => {
@@ -1296,7 +1366,7 @@ describe('metrics selectors', () => {
   describe('getMetricsCardRangeSelectionEnabled', () => {
     it('returns card specific value when defined', () => {
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: false,
@@ -1307,12 +1377,11 @@ describe('metrics selectors', () => {
                 },
               },
             })
-          ),
-          'card1'
+          )
         )
       ).toBeTrue();
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: true,
@@ -1323,15 +1392,14 @@ describe('metrics selectors', () => {
                 },
               },
             })
-          ),
-          'card1'
+          )
         )
       ).toBeFalse();
     });
 
     it('returns global value when card specific value is not defined', () => {
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: true,
@@ -1339,25 +1407,23 @@ describe('metrics selectors', () => {
                 card1: {},
               },
             })
-          ),
-          'card1'
+          )
         )
       ).toBeTrue();
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: false,
             })
-          ),
-          'card1'
+          )
         )
       ).toBeFalse();
     });
 
     it('returns global value when linked time is enabled', () => {
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: true,
@@ -1369,13 +1435,12 @@ describe('metrics selectors', () => {
                 },
               },
             })
-          ),
-          'card1'
+          )
         )
       ).toBeTrue();
 
       expect(
-        selectors.getMetricsCardRangeSelectionEnabled(
+        selectors.getMetricsCardRangeSelectionEnabled('card1')(
           appStateFromMetricsState(
             buildMetricsState({
               rangeSelectionEnabled: false,
@@ -1387,8 +1452,7 @@ describe('metrics selectors', () => {
                 },
               },
             })
-          ),
-          'card1'
+          )
         )
       ).toBeFalse();
     });
@@ -1701,6 +1765,192 @@ describe('metrics selectors', () => {
           )
         )
       ).toEqual(rangeSelectionHeaders);
+    });
+  });
+
+  describe('getGroupedHeadersForCard', () => {
+    let singleSelectionHeaders: ColumnHeader[];
+    let rangeSelectionHeaders: ColumnHeader[];
+    let hparamsState: DeepPartial<HparamsState>;
+
+    beforeEach(() => {
+      singleSelectionHeaders = [
+        {
+          type: ColumnHeaderType.COLOR,
+          name: 'color',
+          displayName: 'Color',
+          enabled: true,
+        },
+        {
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'My Run name',
+          enabled: false,
+        },
+      ];
+      rangeSelectionHeaders = [
+        {
+          type: ColumnHeaderType.MEAN,
+          name: 'mean',
+          displayName: 'Mean',
+          enabled: true,
+        },
+        {
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'My Run name',
+          enabled: false,
+        },
+      ];
+      hparamsState = {
+        dashboardHparamSpecs: [
+          buildHparamSpec({name: 'conv_layers'}),
+          buildHparamSpec({name: 'conv_kernel_size'}),
+        ],
+        dashboardDisplayedHparamColumns: [
+          {
+            type: ColumnHeaderType.HPARAM,
+            name: 'conv_layers',
+            displayName: 'Conv Layers',
+            enabled: true,
+          },
+          {
+            type: ColumnHeaderType.HPARAM,
+            name: 'conv_kernel_size',
+            displayName: 'Conv Kernel Size',
+            enabled: true,
+          },
+        ],
+      };
+    });
+
+    it('returns grouped single selection headers when card range selection is disabled', () => {
+      const state = buildMockState({
+        ...appStateFromMetricsState(
+          buildMetricsState({
+            singleSelectionHeaders,
+            rangeSelectionHeaders,
+            cardStateMap: {
+              card1: {
+                rangeSelectionOverride:
+                  CardFeatureOverride.OVERRIDE_AS_DISABLED,
+              },
+            },
+          })
+        ),
+        ...buildStateFromHparamsState(buildHparamsState(hparamsState)),
+      });
+
+      expect(selectors.getGroupedHeadersForCard('card1')(state)).toEqual([
+        jasmine.objectContaining({
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'My Run name',
+          enabled: false,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_layers',
+          displayName: 'Conv Layers',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_kernel_size',
+          displayName: 'Conv Kernel Size',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.COLOR,
+          name: 'color',
+          displayName: 'Color',
+          enabled: true,
+        }),
+      ]);
+    });
+
+    it('returns grouped range selection headers when card range selection is enabled', () => {
+      const state = buildMockState({
+        ...appStateFromMetricsState(
+          buildMetricsState({
+            singleSelectionHeaders,
+            rangeSelectionHeaders,
+            cardStateMap: {
+              card1: {
+                rangeSelectionOverride: CardFeatureOverride.OVERRIDE_AS_ENABLED,
+              },
+            },
+          })
+        ),
+        ...buildStateFromHparamsState(buildHparamsState(hparamsState)),
+      });
+
+      expect(selectors.getGroupedHeadersForCard('card1')(state)).toEqual([
+        jasmine.objectContaining({
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'My Run name',
+          enabled: false,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_layers',
+          displayName: 'Conv Layers',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_kernel_size',
+          displayName: 'Conv Kernel Size',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.MEAN,
+          name: 'mean',
+          displayName: 'Mean',
+          enabled: true,
+        }),
+      ]);
+    });
+
+    it('returns grouped range selection headers when global range selection is enabled', () => {
+      const state = buildMockState({
+        ...appStateFromMetricsState(
+          buildMetricsState({
+            singleSelectionHeaders,
+            rangeSelectionHeaders,
+            rangeSelectionEnabled: true,
+          })
+        ),
+        ...buildStateFromHparamsState(buildHparamsState(hparamsState)),
+      });
+
+      expect(selectors.getGroupedHeadersForCard('card1')(state)).toEqual([
+        jasmine.objectContaining({
+          type: ColumnHeaderType.RUN,
+          name: 'run',
+          displayName: 'My Run name',
+          enabled: false,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_layers',
+          displayName: 'Conv Layers',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.HPARAM,
+          name: 'conv_kernel_size',
+          displayName: 'Conv Kernel Size',
+          enabled: true,
+        }),
+        jasmine.objectContaining({
+          type: ColumnHeaderType.MEAN,
+          name: 'mean',
+          displayName: 'Mean',
+          enabled: true,
+        }),
+      ]);
     });
   });
 });

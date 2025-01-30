@@ -69,8 +69,10 @@ import {MainViewComponent, SHARE_BUTTON_COMPONENT} from './main_view_component';
 import {MainViewContainer} from './main_view_container';
 import {PinnedViewComponent} from './pinned_view_component';
 import {PinnedViewContainer} from './pinned_view_container';
+import {buildMockState} from '../../../testing/utils';
 
 @Component({
+  standalone: false,
   selector: 'card-view',
   template: `{{ pluginType }}: {{ cardId }}`,
 })
@@ -81,6 +83,7 @@ class TestableCard {
 }
 
 @Component({
+  standalone: false,
   selector: 'test-share-button',
   template: ``,
 })
@@ -182,7 +185,11 @@ describe('metrics main view', () => {
       ],
       providers: [
         provideMockStore({
-          initialState: appStateFromMetricsState(buildMetricsState()),
+          initialState: {
+            ...buildMockState({
+              ...appStateFromMetricsState(buildMetricsState()),
+            }),
+          },
         }),
       ],
       // Skip errors for card renderers, which are tested separately.
@@ -1572,25 +1579,24 @@ describe('metrics main view', () => {
         INDICATOR: By.css('.new-card-pinned'),
       };
 
-      function updatePinnedCards(
-        fixture: ComponentFixture<MainViewContainer>,
-        pinnedCardMetadata: CardIdWithMetadata[]
-      ) {
-        store.overrideSelector(
-          selectors.getPinnedCardsWithMetadata,
-          pinnedCardMetadata
-        );
+      it('does not show any indicator when no cards ever pinned', () => {
+        store.overrideSelector(selectors.getLastPinnedCardTime, 0);
         store.refreshState();
-        fixture.detectChanges();
-      }
 
-      it('does not show any indicator initially', () => {
         const fixture = TestBed.createComponent(MainViewContainer);
         fixture.detectChanges();
 
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
+        const indicator = fixture.debugElement.query(byCss.INDICATOR);
+        expect(indicator).toBeNull();
+      });
+
+      it('does not show any indicator if card pinned before load', () => {
+        store.overrideSelector(selectors.getLastPinnedCardTime, 100);
+        store.refreshState();
+
+        const fixture = TestBed.createComponent(MainViewContainer);
+        fixture.detectChanges();
+
         const indicator = fixture.debugElement.query(byCss.INDICATOR);
         expect(indicator).toBeNull();
       });
@@ -1599,84 +1605,73 @@ describe('metrics main view', () => {
         const fixture = TestBed.createComponent(MainViewContainer);
         fixture.detectChanges();
 
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
+        store.overrideSelector(selectors.getLastPinnedCardTime, 100);
+        store.refreshState();
+        fixture.detectChanges();
 
         const indicator = fixture.debugElement.query(byCss.INDICATOR);
         expect(indicator).toBeTruthy();
       });
+    });
 
-      it('shows the indicator when the same card gets pinned toggled', fakeAsync(() => {
-        const fixture = TestBed.createComponent(MainViewContainer);
-        fixture.detectChanges();
-
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        const card2IndicatorBefore = fixture.debugElement.query(
-          byCss.INDICATOR
-        );
-        // Unpin card2.
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        // Wait for 100ms before repinning to avoid flakiness.
-        tick(100);
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        const card2IndicatorAfter = fixture.debugElement.query(byCss.INDICATOR);
-
-        // It should be a different new-card-pinned indicator instance.
-        expect(card2IndicatorBefore.nativeElement).not.toBe(
-          card2IndicatorAfter.nativeElement
-        );
-        expect(card2IndicatorBefore.attributes['data-id']).not.toBe(
-          card2IndicatorAfter.attributes['data-id']
-        );
-      }));
-
-      it('does not show indicator when you remove a pin', () => {
-        const fixture = TestBed.createComponent(MainViewContainer);
-        fixture.detectChanges();
-
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        updatePinnedCards(fixture, [
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-
-        const indicator = fixture.debugElement.query(byCss.INDICATOR);
-        expect(indicator).toBeNull();
+    describe('clear all pins button', () => {
+      beforeEach(() => {
+        store.overrideSelector(selectors.getEnableGlobalPins, true);
       });
 
-      it('shows an indicator a change contains both removal and addition', () => {
+      it('does not show the button if getEnableGlobalPins is false', () => {
+        store.overrideSelector(selectors.getEnableGlobalPins, false);
+        store.overrideSelector(selectors.getPinnedCardsWithMetadata, []);
         const fixture = TestBed.createComponent(MainViewContainer);
         fixture.detectChanges();
 
-        updatePinnedCards(fixture, [
-          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
-        updatePinnedCards(fixture, [
-          {cardId: 'card2', ...createCardMetadata(PluginType.SCALARS)},
-          {cardId: 'card3', ...createCardMetadata(PluginType.SCALARS)},
-        ]);
+        const clearAllButton = fixture.debugElement.query(
+          By.css('[aria-label="Clear all pinned cards"]')
+        );
+        expect(clearAllButton).toBeNull();
+      });
 
-        const indicator = fixture.debugElement.query(byCss.INDICATOR);
-        expect(indicator).toBeTruthy();
+      it('does not show the button if there is no pinned card', () => {
+        store.overrideSelector(selectors.getPinnedCardsWithMetadata, []);
+        const fixture = TestBed.createComponent(MainViewContainer);
+        fixture.detectChanges();
+
+        const clearAllButton = fixture.debugElement.query(
+          By.css('[aria-label="Clear all pinned cards"]')
+        );
+        expect(clearAllButton).toBeNull();
+      });
+
+      it('shows the button if there is a pinned card', () => {
+        store.overrideSelector(selectors.getPinnedCardsWithMetadata, [
+          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
+          {cardId: 'card2', ...createCardMetadata(PluginType.IMAGES)},
+        ]);
+        const fixture = TestBed.createComponent(MainViewContainer);
+        fixture.detectChanges();
+
+        const clearAllButton = fixture.debugElement.query(
+          By.css('[aria-label="Clear all pinned cards"]')
+        );
+        expect(clearAllButton).toBeTruthy();
+      });
+
+      it('dispatch clear all action when the button is clicked', () => {
+        store.overrideSelector(selectors.getPinnedCardsWithMetadata, [
+          {cardId: 'card1', ...createCardMetadata(PluginType.SCALARS)},
+          {cardId: 'card2', ...createCardMetadata(PluginType.IMAGES)},
+        ]);
+        const fixture = TestBed.createComponent(MainViewContainer);
+        fixture.detectChanges();
+
+        const clearAllButton = fixture.debugElement.query(
+          By.css('[aria-label="Clear all pinned cards"]')
+        );
+        clearAllButton.nativeElement.click();
+
+        expect(dispatchedActions).toEqual([
+          actions.metricsClearAllPinnedCards(),
+        ]);
       });
     });
   });

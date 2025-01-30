@@ -15,42 +15,95 @@ See the License for the specific language governing permissions and
 limitations under the License.
 -->
 
-<tb-data-table
-  [headers]="headers"
-  [sortingInfo]="sortingInfo"
-  [columnCustomizationEnabled]="true"
-  (sortDataBy)="sortDataBy.emit($event)"
-  (orderColumns)="orderColumns.emit($event)"
->
-  <ng-container header>
-    <ng-container *ngFor="let header of getHeaders()">
-      <tb-data-table-header-cell
-        *ngIf="header.enabled"
-        [header]="header"
-        [sortingInfo]="sortingInfo"
-        [hparamsEnabled]="true"
-        [controlsEnabled]="header.type !== ColumnHeaderType.COLOR"
-      ></tb-data-table-header-cell> </ng-container
-  ></ng-container>
-
-  <ng-container content>
-    <ng-container *ngFor="let dataRow of data">
-      <tb-data-table-content-row>
-        <ng-container *ngFor="let header of getHeaders()">
-          <tb-data-table-content-cell
-            *ngIf="header.enabled"
-            [header]="header"
-            [datum]="dataRow[header.name]"
-          >
-            <div
-              *ngIf="header.type === ColumnHeaderType.COLOR"
-              class="row-circle"
-            >
-              <span [style.backgroundColor]="dataRow['color']"></span>
+<div class="filter-row">
+  <tb-filter-input
+    class="run-filter"
+    value="{{ regexFilter }}"
+    (keyup)="onFilterKeyUp($event)"
+    placeholder="Filter runs (regex)"
+  ></tb-filter-input>
+</div>
+<filterbar></filterbar>
+<div class="table-container">
+  <tb-data-table
+    [headers]="headers"
+    [sortingInfo]="sortingInfo"
+    [selectableColumns]="selectableColumns"
+    [numColumnsLoaded]="numColumnsLoaded"
+    [hasMoreColumnsToLoad]="numColumnsLoaded === numColumnsToLoad"
+    [columnFilters]="columnFilters"
+    [loading]="loading"
+    [shouldAddBorders]="true"
+    (sortDataBy)="sortDataBy.emit($event)"
+    (orderColumns)="orderColumns.emit($event)"
+    (addColumn)="addColumn.emit($event)"
+    (removeColumn)="removeColumn.emit($event)"
+    (addFilter)="addFilter.emit($event)"
+    (loadAllColumns)="loadAllColumns.emit()"
+  >
+    <ng-container header>
+      <ng-container *ngFor="let header of extendHeaders(headers)">
+        <tb-data-table-header-cell
+          [header]="header"
+          [sortingInfo]="sortingInfo"
+          [ngClass]="['table-column-' + header.name]"
+        >
+          <ng-container [ngSwitch]="header.name">
+            <div *ngSwitchCase="'selected'">
+              <mat-checkbox
+                [checked]="allRowsSelected()"
+                [indeterminate]="!allRowsSelected() && someRowsSelected()"
+                (click)="handleSelectAll($event)"
+              ></mat-checkbox>
             </div>
-          </tb-data-table-content-cell>
-        </ng-container>
-      </tb-data-table-content-row>
+            <span class="group-menu-container" *ngSwitchCase="'color'">
+              <runs-group-menu-button
+                [experimentIds]="experimentIds"
+              ></runs-group-menu-button>
+            </span>
+          </ng-container>
+        </tb-data-table-header-cell> </ng-container
+    ></ng-container>
+
+    <ng-container content>
+      <ng-container *ngFor="let dataRow of data; trackBy: trackByRuns">
+        <tb-data-table-content-row [attr.data-id]="dataRow.id">
+          <ng-container *ngFor="let header of extendHeaders(headers)">
+            <tb-data-table-content-cell
+              [header]="header"
+              [datum]="dataRow[header.name]"
+              [ngClass]="['table-column-' + header.name]"
+            >
+              <ng-container [ngSwitch]="header.name">
+                <span *ngSwitchCase="'color'" class="color-container">
+                  <button
+                    class="run-color-swatch"
+                    [style.background]="dataRow['color']"
+                    [colorPicker]="dataRow['color']"
+                    [cpDialogDisplay]="'popup'"
+                    [cpPositionOffset]="-20"
+                    [cpUseRootViewContainer]="true"
+                    [cpOutputFormat]="'hex'"
+                    (colorPickerChange)="onRunColorChange.emit({runId: dataRow.id, newColor: $event})"
+                  ></button>
+                </span>
+                <div *ngSwitchCase="'selected'">
+                  <mat-checkbox
+                    [checked]="dataRow['selected']"
+                    (click)="selectionClick($event, dataRow['id'])"
+                  ></mat-checkbox>
+                </div>
+                <span *ngSwitchCase="'experimentAlias'">
+                  <tb-experiment-alias
+                    [alias]="dataRow['experimentAlias']"
+                    [title]="dataRow['experimentName']"
+                  ></tb-experiment-alias>
+                </span>
+              </ng-container>
+            </tb-data-table-content-cell>
+          </ng-container>
+        </tb-data-table-content-row>
+      </ng-container>
     </ng-container>
-  </ng-container>
-</tb-data-table>
+  </tb-data-table>
+</div>

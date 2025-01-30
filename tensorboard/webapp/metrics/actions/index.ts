@@ -26,10 +26,10 @@ import {
 import {CardState} from '../store/metrics_types';
 import {
   CardId,
+  CardUniqueInfo,
   HeaderEditInfo,
   HeaderToggleInfo,
   HistogramMode,
-  MinMaxStep,
   PluginType,
   TooltipSort,
   XAxisType,
@@ -234,8 +234,8 @@ export const sortingDataTable = createAction(
   props<SortingInfo>()
 );
 
-export const dataTableColumnEdited = createAction(
-  '[Metrics] Data table columns edited in edit menu',
+export const dataTableColumnOrderChanged = createAction(
+  '[Metrics] Data table columns order changed',
   props<HeaderEditInfo>()
 );
 
@@ -270,6 +270,19 @@ export const rangeSelectionToggled = createAction(
 
 export const metricsHideEmptyCardsToggled = createAction(
   '[Metrics] Hide Empty Cards Changed'
+);
+
+export const metricsUnresolvedPinnedCardsFromLocalStorageAdded = createAction(
+  '[Metrics] Unresolved Pinned Cards From Local Storage Added',
+  props<{cards: CardUniqueInfo[]}>()
+);
+
+export const metricsClearAllPinnedCards = createAction(
+  '[Metrics] Clear all pinned cards'
+);
+
+export const metricsEnableSavingPinsToggled = createAction(
+  '[Metrics] Enable Saving Pins Toggled'
 );
 
 // TODO(jieweiwu): Delete after internal code is updated.

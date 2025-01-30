@@ -12,7 +12,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
-import {ChangeDetectionStrategy, Component, Input} from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  EventEmitter,
+  HostListener,
+  Input,
+  Output,
+} from '@angular/core';
 import {ColumnHeader, ColumnHeaderType} from './types';
 import {
   intlNumberFormatter,
@@ -21,6 +28,7 @@ import {
 } from '../line_chart_v2/lib/formatter';
 
 @Component({
+  standalone: false,
   selector: 'tb-data-table-content-cell',
   templateUrl: 'content_cell_component.ng.html',
   styleUrls: ['content_cell_component.css'],
@@ -29,6 +37,8 @@ import {
 export class ContentCellComponent {
   @Input() header!: ColumnHeader;
   @Input() datum!: string | number;
+
+  @Output() contextMenuOpened = new EventEmitter<MouseEvent>();
 
   ColumnHeaderType = ColumnHeaderType;
 
@@ -70,5 +80,10 @@ export class ContentCellComponent {
       default:
         return '';
     }
+  }
+
+  @HostListener('contextmenu', ['$event'])
+  onContextMenuOpened(event: MouseEvent) {
+    this.contextMenuOpened.emit(event);
   }
 }
